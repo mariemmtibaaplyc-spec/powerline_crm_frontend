@@ -1,0 +1,416 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f9fc;
+  --foreground: #102033;
+  --panel: rgba(255, 255, 255, 0.9);
+  --border: rgba(21, 38, 58, 0.1);
+  --primary: #2450a6;
+  --primary-foreground: #f7fbff;
+  --accent: #0f6a66;
+  --accent-foreground: #effcf9;
+  --muted: #eaf2f8;
+  --muted-foreground: #667b92;
+  --danger: #b94b4b;
+  --ring: rgba(45, 111, 203, 0.18);
+  --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+  --shadow: 0 28px 92px rgba(18, 31, 51, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(15, 106, 102, 0.08), transparent 20%),
+    radial-gradient(circle at top right, rgba(43, 78, 142, 0.08), transparent 22%),
+    linear-gradient(180deg, #f6f9fc 0%, #edf3f8 100%);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(16, 32, 51, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 32, 51, 0.03) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(circle at center, black, transparent 78%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(45, 111, 203, 0.16);
+}
+
+.surface {
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(0, -18px, 0);
+  }
+}
+
+@keyframes loginPreviewDrift {
+
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.42;
+  }
+
+  50% {
+    transform: translate3d(18px, -14px, 0) scale(1.08);
+    opacity: 0.66;
+  }
+}
+
+@keyframes loginPreviewRing {
+
+  0%,
+  100% {
+    transform: scale(0.94);
+    opacity: 0.22;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.48;
+  }
+}
+
+@keyframes loginPreviewSweep {
+  0% {
+    transform: translate3d(-8%, 0, 0);
+    opacity: 0;
+  }
+
+  25% {
+    opacity: 0.1;
+  }
+
+  50% {
+    opacity: 0.22;
+  }
+
+  75% {
+    opacity: 0.08;
+  }
+
+  100% {
+    transform: translate3d(10%, 0, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes shootingStar {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.72);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  60% {
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: translate3d(20rem, 13rem, 0) scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes starPulse {
+
+  0%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.22;
+  }
+
+  50% {
+    transform: scale(1.16);
+    opacity: 0.82;
+  }
+}
+
+.auth-orb {
+  animation: float 18s ease-in-out infinite;
+}
+
+.login-page-backdrop {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(45, 111, 203, 0.28), transparent 18%),
+    radial-gradient(circle at 84% 16%, rgba(211, 122, 58, 0.18), transparent 18%),
+    radial-gradient(circle at 76% 72%, rgba(15, 106, 102, 0.18), transparent 20%),
+    radial-gradient(circle at 50% 52%, rgba(19, 58, 103, 0.26), transparent 34%),
+    linear-gradient(180deg, #0d1b2a 0%, #102841 100%);
+}
+
+.login-stage-shell {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.03));
+  backdrop-filter: blur(24px);
+}
+
+.login-left-lustre {
+  background:
+    radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.96), transparent 24%),
+    radial-gradient(circle at 24% 72%, rgba(234, 244, 255, 0.72), transparent 22%),
+    radial-gradient(circle at 42% 82%, rgba(247, 239, 229, 0.42), transparent 18%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.26), transparent 42%);
+}
+
+.login-panel-shape {
+  border-top-left-radius: 34% 100%;
+  border-bottom-left-radius: 34% 100%;
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.08),
+    -28px 0 80px rgba(6, 18, 34, 0.18);
+}
+
+.login-panel-ambient {
+  background:
+    radial-gradient(circle at 72% 22%, rgba(211, 122, 58, 0.2), transparent 18%),
+    radial-gradient(circle at 78% 66%, rgba(15, 106, 102, 0.28), transparent 24%),
+    radial-gradient(circle at 44% 40%, rgba(255, 255, 255, 0.1), transparent 16%),
+    linear-gradient(180deg, rgba(36, 80, 166, 0.98) 0%, rgba(13, 27, 42, 0.99) 100%);
+}
+
+.login-panel-ribbon {
+  position: absolute;
+  left: -8%;
+  top: -18%;
+  height: 150%;
+  width: 46%;
+  border-radius: 999px;
+  background: linear-gradient(180deg,
+      rgba(211, 122, 58, 0.72) 0%,
+      rgba(123, 191, 255, 0.42) 34%,
+      rgba(36, 80, 166, 0.08) 62%,
+      rgba(23, 48, 74, 0) 82%);
+  transform: rotate(10deg);
+  filter: blur(26px);
+  opacity: 0.92;
+}
+
+.login-panel-glow {
+  position: absolute;
+  bottom: 6%;
+  right: 7%;
+  height: 38%;
+  width: 42%;
+  border-radius: 48% 52% 44% 56% / 46% 44% 56% 54%;
+  background: radial-gradient(circle at 35% 35%,
+      rgba(244, 233, 220, 0.96) 0%,
+      rgba(156, 223, 216, 0.72) 34%,
+      rgba(45, 111, 203, 0.28) 68%,
+      transparent 82%);
+  filter: blur(8px);
+  opacity: 0.98;
+}
+
+.login-preview-ambient {
+  overflow: hidden;
+}
+
+.login-preview-orb,
+.login-preview-ring,
+.login-preview-sweep {
+  position: absolute;
+}
+
+.login-preview-orb {
+  border-radius: 999px;
+  filter: blur(34px);
+  animation: loginPreviewDrift 11s ease-in-out infinite;
+}
+
+.login-preview-orb-a {
+  left: 8%;
+  top: 10%;
+  height: 10rem;
+  width: 10rem;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 68%);
+}
+
+.login-preview-orb-b {
+  right: 10%;
+  bottom: 12%;
+  height: 12rem;
+  width: 12rem;
+  background: radial-gradient(circle, rgba(143, 185, 255, 0.14), transparent 70%);
+  animation-delay: 2.6s;
+}
+
+.login-preview-ring {
+  left: 50%;
+  top: 47%;
+  height: 14rem;
+  width: 14rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 40px rgba(255, 255, 255, 0.08);
+  transform: translate(-50%, -50%);
+  animation: loginPreviewRing 9s ease-in-out infinite;
+}
+
+.login-preview-sweep {
+  inset: 4% 6%;
+  border-radius: 2rem;
+  background: linear-gradient(112deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.02) 32%,
+      rgba(255, 255, 255, 0.14) 50%,
+      rgba(255, 255, 255, 0.03) 68%,
+      transparent 100%);
+  filter: blur(10px);
+  animation: loginPreviewSweep 8s ease-in-out infinite;
+}
+
+.login-shooting-stars {
+  overflow: hidden;
+}
+
+.login-shooting-star,
+.login-star-dot {
+  position: absolute;
+  pointer-events: none;
+}
+
+.login-shooting-star {
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 0 12px rgba(255, 255, 255, 0.74),
+    0 0 26px rgba(132, 187, 255, 0.28),
+    0 0 40px rgba(255, 255, 255, 0.18);
+  will-change: transform, opacity;
+  animation: shootingStar 5.8s linear infinite;
+}
+
+.login-shooting-star-a {
+  left: 8%;
+  top: 14%;
+}
+
+.login-shooting-star-b {
+  left: 66%;
+  top: 20%;
+  animation-delay: 0.9s;
+  animation-duration: 5.2s;
+}
+
+.login-shooting-star-c {
+  left: 16%;
+  top: 64%;
+  animation-delay: 1.8s;
+  animation-duration: 6.2s;
+}
+
+.login-shooting-star-d {
+  left: 74%;
+  top: 58%;
+  animation-delay: 2.6s;
+  animation-duration: 5.6s;
+}
+
+.login-shooting-star-e {
+  left: 28%;
+  top: 10%;
+  animation-delay: 3.4s;
+  animation-duration: 5s;
+}
+
+.login-shooting-star-f {
+  left: 82%;
+  top: 76%;
+  animation-delay: 4.4s;
+  animation-duration: 5.4s;
+}
+
+.login-star-dot {
+  height: 6px;
+  width: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 0 14px rgba(255, 255, 255, 0.62),
+    0 0 22px rgba(113, 178, 255, 0.26);
+  animation: starPulse 2.8s ease-in-out infinite;
+}
+
+.login-star-dot-a {
+  left: 24%;
+  top: 28%;
+}
+
+.login-star-dot-b {
+  left: 82%;
+  top: 34%;
+  animation-delay: 0.9s;
+}
+
+.login-star-dot-c {
+  left: 14%;
+  top: 82%;
+  animation-delay: 1.8s;
+}
+
+.login-star-dot-d {
+  left: 88%;
+  top: 74%;
+  animation-delay: 2.7s;
+}
+
+.login-star-dot-e {
+  left: 48%;
+  top: 18%;
+  animation-delay: 1.2s;
+}
+
+.login-star-dot-f {
+  left: 62%;
+  top: 82%;
+  animation-delay: 2.1s;
+}
