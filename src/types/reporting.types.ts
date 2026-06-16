@@ -35,6 +35,14 @@ export interface ReportingProductionEvolutionPoint {
   conversion_rate: number;
 }
 
+export interface ReportingQualificationStatusItem {
+  qualification_id: number | null;
+  qualification_name: string;
+  qualification_type: string | null;
+  total: number;
+  percentage: number;
+}
+
 export interface ReportingDashboardData {
   period?: ReportingValue;
   calls?: ReportingValue;

@@ -21,6 +21,7 @@ import type {
   ReportingDashboardParams,
   ReportingPauseReportsData,
   ReportingPauseReportsResponse,
+  ReportingQualificationStatusItem,
   ReportingQualificationsByAgentData,
   ReportingQualificationsByAgentResponse,
   ReportingSalesPerAgentData,
@@ -46,6 +47,12 @@ type BackendReportingProductionEvolutionResponse =
   | ReportingProductionEvolutionPoint[]
   | {
       data?: ReportingProductionEvolutionPoint[];
+    };
+
+type BackendReportingQualificationsStatusResponse =
+  | ReportingQualificationStatusItem[]
+  | {
+      data?: ReportingQualificationStatusItem[];
     };
 
 type BackendReportingAgentsProductivityResponse =
@@ -150,6 +157,20 @@ function extractContactReachabilityData(
 function extractProductionEvolutionData(
   response: BackendReportingProductionEvolutionResponse,
 ): ReportingProductionEvolutionPoint[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if ("data" in response && Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return [];
+}
+
+function extractQualificationsStatusData(
+  response: BackendReportingQualificationsStatusResponse,
+): ReportingQualificationStatusItem[] {
   if (Array.isArray(response)) {
     return response;
   }
@@ -443,6 +464,26 @@ export const reportingApi = {
       throw toReportingError(
         error,
         "Impossible de charger l'evolution de la production pour le moment.",
+      );
+    }
+  },
+
+  async getQualificationsStatus(
+    params: ReportingDashboardParams = {},
+  ): Promise<ReportingQualificationStatusItem[]> {
+    try {
+      const { data } = await apiClient.get<BackendReportingQualificationsStatusResponse>(
+        "/reporting/qualifications-status",
+        {
+          params: sanitizeDashboardParams(params),
+        },
+      );
+
+      return extractQualificationsStatusData(data);
+    } catch (error) {
+      throw toReportingError(
+        error,
+        "Impossible de charger l'etat des qualifications pour le moment.",
       );
     }
   },
