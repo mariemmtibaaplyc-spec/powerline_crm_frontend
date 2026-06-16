@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import {
   Activity,
   BellRing,
@@ -25,6 +26,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export function AdminRealtimeModule() {
   const { agents, counts, snapshot, trafficMetrics, isLoading, error } = useLiveMonitoring();
+  const [showOfflineAgents, setShowOfflineAgents] = useState(false);
 
   const waitingCount = snapshot?.ringing_agents ?? agents.filter((agent) => agent.status === "ringing").length;
   const inCallCount = snapshot?.in_call_agents ?? agents.filter((agent) => agent.status === "in_call").length;
@@ -32,6 +34,10 @@ export function AdminRealtimeModule() {
   const qualificationCount =
     snapshot?.wrap_up_agents ?? agents.filter((agent) => agent.status === "qualification").length;
   const offlineCount = snapshot?.offline_agents ?? agents.filter((agent) => agent.status === "offline").length;
+  const visibleAgents = useMemo(
+    () => (showOfflineAgents ? agents : agents.filter((agent) => agent.status !== "offline")),
+    [agents, showOfflineAgents],
+  );
 
   if (isLoading) {
     return (
@@ -106,7 +112,7 @@ export function AdminRealtimeModule() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-2 rounded-full border border-[#dce7f3] bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#295086]">
                   <span className="h-2 w-2 rounded-full bg-[#2d6fcb] animate-pulse" />
-                  {counts.connected} agents observes
+                  {visibleAgents.length} agents affiches
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-[#d9eee9] bg-[#f3fbf8] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#0f6a66]">
                   <Activity className="h-3.5 w-3.5" />
@@ -158,6 +164,27 @@ export function AdminRealtimeModule() {
                   />
                 </div>
 
+                <div className="flex items-center justify-between gap-3 border-b border-[#d7e0eb] bg-[#f8fbff] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#102033]">Tableau agents</p>
+                    <p className="text-xs text-[#6f8195]">
+                      Affichage par defaut des agents connectes. Les agents hors ligne restent comptes dans les KPI.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowOfflineAgents((currentValue) => !currentValue)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
+                      showOfflineAgents
+                        ? "border-[#c9d6e5] bg-white text-[#24415d]"
+                        : "border-[#d9eee9] bg-[#f3fbf8] text-[#0f6a66]"
+                    }`}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    {showOfflineAgents ? "Masquer hors ligne" : "Afficher hors ligne"}
+                  </button>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[980px] text-left text-sm">
                     <thead className="bg-[#1b1f74] text-white">
@@ -172,9 +199,16 @@ export function AdminRealtimeModule() {
                       </tr>
                     </thead>
                     <tbody>
-                      {agents.map((agent, index) => (
+                      {visibleAgents.map((agent, index) => (
                         <AgentRealtimeRow key={agent.id} agent={agent} index={index} />
                       ))}
+                      {visibleAgents.length === 0 ? (
+                        <tr className="border-b border-[#eef2f6] bg-white text-[#607287]">
+                          <td className="px-3 py-6 text-sm" colSpan={7}>
+                            Aucun agent connecte a afficher pour le moment.
+                          </td>
+                        </tr>
+                      ) : null}
                     </tbody>
                   </table>
                 </div>
