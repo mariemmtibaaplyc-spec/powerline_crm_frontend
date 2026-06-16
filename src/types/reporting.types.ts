@@ -14,6 +14,14 @@ export interface ReportingDashboardParams {
   campaign_id?: string;
 }
 
+export interface ReportingContactReachabilityData {
+  reachable_contacts: number;
+  unreachable_contacts: number;
+  total_contacts: number;
+  retry_count: number;
+  reachability_rate: number;
+}
+
 export interface ReportingDashboardData {
   period?: ReportingValue;
   calls?: ReportingValue;
@@ -26,7 +34,6 @@ export interface ReportingDashboardData {
   leads?: ReportingValue;
   sales?: ReportingValue;
 }
-
 export interface ReportingAgentsProductivityParams
   extends ReportingDashboardParams {}
 

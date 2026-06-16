@@ -8,6 +8,7 @@ import type {
   ReportingAgentsProductivityResponse,
   ReportingAppointmentsPerAgentData,
   ReportingAppointmentsPerAgentResponse,
+  ReportingContactReachabilityData,
   ReportingCallsOverviewData,
   ReportingCallsOverviewResponse,
   ReportingCallsPerAgentData,
@@ -31,6 +32,12 @@ type BackendReportingDashboardResponse =
   | ReportingDashboardData
   | {
       data?: ReportingDashboardData;
+    };
+
+type BackendReportingContactReachabilityResponse =
+  | ReportingContactReachabilityData
+  | {
+      data?: ReportingContactReachabilityData;
     };
 
 type BackendReportingAgentsProductivityResponse =
@@ -115,6 +122,21 @@ function extractDashboardData(
   }
 
   return response as ReportingDashboardData;
+}
+
+function extractContactReachabilityData(
+  response: BackendReportingContactReachabilityResponse,
+): ReportingContactReachabilityData {
+  if (
+    "data" in response &&
+    response.data &&
+    typeof response.data === "object" &&
+    !Array.isArray(response.data)
+  ) {
+    return response.data;
+  }
+
+  return response as ReportingContactReachabilityData;
 }
 
 function extractAgentsProductivityData(
@@ -359,6 +381,26 @@ export const reportingApi = {
       throw toReportingError(
         error,
         "Impossible de charger le dashboard reporting pour le moment.",
+      );
+    }
+  },
+
+  async getContactReachability(
+    params: ReportingDashboardParams = {},
+  ): Promise<ReportingContactReachabilityData> {
+    try {
+      const { data } = await apiClient.get<BackendReportingContactReachabilityResponse>(
+        "/reporting/contact-reachability",
+        {
+          params: sanitizeDashboardParams(params),
+        },
+      );
+
+      return extractContactReachabilityData(data);
+    } catch (error) {
+      throw toReportingError(
+        error,
+        "Impossible de charger la joignabilite des contacts pour le moment.",
       );
     }
   },
