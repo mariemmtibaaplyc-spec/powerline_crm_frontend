@@ -9,6 +9,8 @@ import type {
   ReportingAppointmentsPerAgentData,
   ReportingAppointmentsPerAgentResponse,
   ReportingContactReachabilityData,
+  ReportingProductionEvolutionParams,
+  ReportingProductionEvolutionPoint,
   ReportingCallsOverviewData,
   ReportingCallsOverviewResponse,
   ReportingCallsPerAgentData,
@@ -38,6 +40,12 @@ type BackendReportingContactReachabilityResponse =
   | ReportingContactReachabilityData
   | {
       data?: ReportingContactReachabilityData;
+    };
+
+type BackendReportingProductionEvolutionResponse =
+  | ReportingProductionEvolutionPoint[]
+  | {
+      data?: ReportingProductionEvolutionPoint[];
     };
 
 type BackendReportingAgentsProductivityResponse =
@@ -137,6 +145,20 @@ function extractContactReachabilityData(
   }
 
   return response as ReportingContactReachabilityData;
+}
+
+function extractProductionEvolutionData(
+  response: BackendReportingProductionEvolutionResponse,
+): ReportingProductionEvolutionPoint[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if ("data" in response && Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return [];
 }
 
 function extractAgentsProductivityData(
@@ -401,6 +423,26 @@ export const reportingApi = {
       throw toReportingError(
         error,
         "Impossible de charger la joignabilite des contacts pour le moment.",
+      );
+    }
+  },
+
+  async getProductionEvolution(
+    params: ReportingProductionEvolutionParams = {},
+  ): Promise<ReportingProductionEvolutionPoint[]> {
+    try {
+      const { data } = await apiClient.get<BackendReportingProductionEvolutionResponse>(
+        "/reporting/production-evolution",
+        {
+          params: sanitizeDashboardParams(params),
+        },
+      );
+
+      return extractProductionEvolutionData(data);
+    } catch (error) {
+      throw toReportingError(
+        error,
+        "Impossible de charger l'evolution de la production pour le moment.",
       );
     }
   },

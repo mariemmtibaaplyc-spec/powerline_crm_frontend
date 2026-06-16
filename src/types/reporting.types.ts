@@ -22,6 +22,19 @@ export interface ReportingContactReachabilityData {
   reachability_rate: number;
 }
 
+export interface ReportingProductionEvolutionParams
+  extends Pick<ReportingDashboardParams, "from" | "to" | "campaign_id"> {
+  interval?: "day" | "week" | "month";
+}
+
+export interface ReportingProductionEvolutionPoint {
+  date: string;
+  total_calls: number;
+  total_sales: number;
+  total_appointments: number;
+  conversion_rate: number;
+}
+
 export interface ReportingDashboardData {
   period?: ReportingValue;
   calls?: ReportingValue;
