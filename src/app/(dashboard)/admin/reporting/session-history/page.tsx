@@ -1,6 +1,6 @@
 "use client";
 
-import { Info } from "lucide-react";
+import { CalendarClock, Clock3, PauseCircle, Timer, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CountText } from "@/components/reporting/count-text";
 import { DateRangePill } from "@/components/reporting/date-range-pill";
@@ -13,18 +13,14 @@ import { ReportingFilters } from "@/components/reporting/reporting-filters-panel
 import { ReportingLoadingState } from "@/components/reporting/reporting-loading-state";
 import { ReportingPageLayout } from "@/components/reporting/reporting-page-layout";
 import { ReportingTableCard } from "@/components/reporting/reporting-table-card";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { StatusBadge } from "@/components/reporting/status-badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { Table, TableCell, TableHeadCell, TableWrapper } from "@/components/ui/table";
-import { useAgentsProductivity } from "@/features/reporting/hooks/use-agents-productivity";
-import { REPORTING_SURFACE_CLASS } from "@/features/reporting/lib/colors";
+import { useSessionsHistoryReporting } from "@/features/reporting/hooks/use-sessions-history-reporting";
 import {
   extractReportingRowsSource,
+  formatReportingDate,
   formatReportingDateRange,
 } from "@/features/reporting/lib/date-range";
 import {
@@ -33,306 +29,296 @@ import {
   pickReportingValueByAliases,
   toReportingRecordArray,
 } from "@/features/reporting/lib/parsers";
-import { formatReportingDurationFromSeconds } from "@/features/reporting/lib/formatters";
+import { useUsers } from "@/features/users/hooks/use-users";
 import type {
-  ReportingAgentsProductivityData,
-  ReportingAgentsProductivityParams,
-  ReportingPrimitive,
+  ReportingDashboardParams,
+  ReportingSessionHistoryRow,
+  ReportingSessionsHistoryData,
 } from "@/types/reporting.types";
 
-interface TimeTrackingRow {
+interface SessionHistoryViewRow {
   id: string;
-  name: string;
-  communicationSec: number;
-  qualificationSec: number;
-  waitingSec: number;
-  pauseSec: number;
-  workingDurationSec: number;
-  handledCalls?: ReportingPrimitive;
+  rowKey: string;
+  agentName: string;
+  role: string | null;
+  email: string | null;
+  isActive: boolean | null;
+  sessionDate: string | null;
+  loginTime: string | null;
+  logoutTime: string | null;
+  totalConnectedTime: number;
+  pausesCount: number;
+  pauseDuration: number;
 }
 
-const timeSegments = [
-  {
-    key: "communicationSec",
-    label: "Communication",
-    color: "bg-[#82a80f]",
-    textColor: "text-[#6f930a]",
-    bgSoft: "bg-[#f2f8d8]",
-  },
-  {
-    key: "qualificationSec",
-    label: "Qualification",
-    color: "bg-[#2d6fcb]",
-    textColor: "text-[#2d6fcb]",
-    bgSoft: "bg-[#e9f3ff]",
-  },
-  {
-    key: "waitingSec",
-    label: "Attente",
-    color: "bg-[#111827]",
-    textColor: "text-[#111827]",
-    bgSoft: "bg-[#eef2f7]",
-  },
-  {
-    key: "pauseSec",
-    label: "Pause",
-    color: "bg-[#b63a16]",
-    textColor: "text-[#b63a16]",
-    bgSoft: "bg-[#fde8e1]",
-  },
-] as const;
+function toDisplayDate(value: string | null) {
+  if (!value) {
+    return "—";
+  }
 
-function buildRows(data: ReportingAgentsProductivityData | null) {
+  return formatReportingDate(value);
+}
+
+function toDisplayDateTime(value: string | null) {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function buildSessionRows(data: ReportingSessionsHistoryData | null) {
   const rowsSource = extractReportingRowsSource(data);
 
   return toReportingRecordArray(rowsSource)
-    .map((record) => {
-      const id = String(pickReportingValueByAliases(record, ["agent_id", "id", "user_id"]) ?? "");
-      const name = String(
+    .map((record, index) => {
+      const row = record as Record<string, unknown> as Partial<ReportingSessionHistoryRow>;
+      const agentId =
+        parseReportingNumericValue(
+          pickReportingValueByAliases(record, ["agent_id", "user_id", "id"]),
+        ) ?? index + 1;
+      const agentName = String(
         pickReportingValueByAliases(record, [
           "agent_name",
           "name",
           "full_name",
           "username",
           "agent",
-          "agent_id",
         ]) ?? "",
       );
-
-      const communicationSec =
+      const roleValue = pickReportingValueByAliases(record, ["role", "agent_role"]);
+      const emailValue = pickReportingValueByAliases(record, ["email", "agent_email"]);
+      const activeValue = pickReportingValueByAliases(record, ["is_active", "active"]);
+      const sessionDateValue = pickReportingValueByAliases(record, [
+        "session_date",
+        "date",
+        "day",
+      ]);
+      const loginTimeValue = pickReportingValueByAliases(record, [
+        "login_time",
+        "login_at",
+        "login",
+        "started_at",
+      ]);
+      const logoutTimeValue = pickReportingValueByAliases(record, [
+        "logout_time",
+        "logout_at",
+        "logout",
+        "ended_at",
+      ]);
+      const totalConnectedTime =
         parseReportingNumericValue(
           pickReportingValueByAliases(record, [
-            "total_talk_time",
-            "talk_time_seconds",
-            "total_talk_time_seconds",
-          ]),
-        ) ?? 0;
-      const pauseSec =
-        parseReportingNumericValue(
-          pickReportingValueByAliases(record, [
-            "total_pause_time",
-            "pause_time_seconds",
-            "total_pause_time_seconds",
-          ]),
-        ) ?? 0;
-      const workingDurationSec =
-        parseReportingNumericValue(
-          pickReportingValueByAliases(record, [
-            "working_duration",
+            "total_connected_time",
             "connected_time_seconds",
-            "connection_time_seconds",
+            "connected_duration_seconds",
             "total_connected_time_seconds",
           ]),
         ) ?? 0;
-      const qualificationSec = 0;
-      const waitingSec = Math.max(
-        workingDurationSec - communicationSec - pauseSec - qualificationSec,
-        0,
-      );
+      const pausesCount =
+        parseReportingNumericValue(
+          pickReportingValueByAliases(record, [
+            "pauses_count",
+            "pause_count",
+            "total_pauses",
+            "pauses",
+          ]),
+        ) ?? 0;
+      const pauseDuration =
+        parseReportingNumericValue(
+          pickReportingValueByAliases(record, [
+            "pause_duration",
+            "pause_duration_seconds",
+            "total_pause_time",
+            "pause_time_seconds",
+          ]),
+        ) ?? 0;
+
+      const fallbackId = normalizeReportingKey(agentName || `session-${agentId}`);
+      const sessionDate = typeof sessionDateValue === "string" && sessionDateValue.trim()
+        ? sessionDateValue
+        : null;
+      const loginTime = typeof loginTimeValue === "string" && loginTimeValue.trim()
+        ? loginTimeValue
+        : null;
+      const logoutTime = typeof logoutTimeValue === "string" && logoutTimeValue.trim()
+        ? logoutTimeValue
+        : null;
 
       return {
-        id: id || normalizeReportingKey(name),
-        name,
-        communicationSec,
-        qualificationSec,
-        waitingSec,
-        pauseSec,
-        workingDurationSec,
-        handledCalls: pickReportingValueByAliases(record, [
-          "answered_calls",
-          "handled_calls",
-          "completed_calls",
-          "processed_calls",
-        ]),
+        id: `${agentId}`,
+        rowKey: [agentId, sessionDate ?? "no-date", loginTime ?? "no-login", index].join("-"),
+        agentName: agentName || `Agent #${agentId}`,
+        role: typeof roleValue === "string" ? roleValue : row.role ?? null,
+        email: typeof emailValue === "string" ? emailValue : row.email ?? null,
+        isActive:
+          typeof activeValue === "boolean"
+            ? activeValue
+            : typeof activeValue === "number"
+              ? activeValue > 0
+              : row.is_active ?? null,
+        sessionDate,
+        loginTime,
+        logoutTime,
+        totalConnectedTime,
+        pausesCount,
+        pauseDuration,
       };
     })
-    .filter((row) => row.name || row.communicationSec > 0 || row.workingDurationSec > 0);
+    .filter(
+      (row) =>
+        row.agentName ||
+        row.sessionDate !== null ||
+        row.totalConnectedTime > 0 ||
+        row.pausesCount > 0,
+    );
 }
 
-function Legend() {
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-4">
-      {timeSegments.map((segment) => (
-        <div
-          key={segment.key}
-          className={`inline-flex items-center gap-2 rounded-full border border-[#dbe5ef] px-3 py-1.5 text-xs font-medium ${segment.bgSoft} ${segment.textColor}`}
-        >
-          <span className={`h-2.5 w-2.5 rounded-full ${segment.color}`} />
-          <span>{segment.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+function ActiveStatusLabel({ value }: { value: boolean | null }) {
+  if (value === null) {
+    return <span className="text-sm text-[#7b8da0]">—</span>;
+  }
 
-function VerticalStackedTimelineChart({ rows }: { rows: TimeTrackingRow[] }) {
-  const chartHeight = 320;
-  const maxValue = Math.max(...rows.map((row) => row.workingDurationSec), 1);
-  const axisTicks = [1, 0.75, 0.5, 0.25, 0].map((ratio) => {
-    const value = maxValue * ratio;
-    return {
-      ratio,
-      label: formatReportingDurationFromSeconds(value),
-    };
-  });
-
-  return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[1100px]">
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <p className="text-lg font-semibold text-[#102033]">Repartition du temps</p>
-            <p className="text-sm text-[#607287]">
-              Communication, qualification, attente et pause par agent.
-            </p>
-          </div>
-          <Legend />
-        </div>
-
-        <div className="grid grid-cols-[120px_1fr] gap-4">
-          <div className="relative" style={{ height: `${chartHeight}px` }}>
-            <p className="absolute left-0 top-1/2 -translate-y-1/2 -rotate-90 text-xs font-medium text-[#607287]">
-              Duree
-            </p>
-            {axisTicks.map((tick) => (
-              <div
-                key={tick.ratio}
-                className="absolute left-7 right-0 flex -translate-y-1/2 items-center"
-                style={{ top: `${tick.ratio * 100}%` }}
-              >
-                <span className="w-16 text-[11px] font-medium text-[#607287]">
-                  {tick.label}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="relative" style={{ height: `${chartHeight + 70}px` }}>
-            {axisTicks.map((tick) => (
-              <div
-                key={tick.ratio}
-                className="absolute left-0 right-0 border-t border-dashed border-[#e4ebf3]"
-                style={{ top: `${tick.ratio * chartHeight}px` }}
-              />
-            ))}
-
-            <div className="absolute bottom-[70px] left-0 right-0 flex h-[320px] items-end gap-3 px-2">
-              {rows.map((row) => {
-                const orderedParts = [
-                  { key: "pauseSec", value: row.pauseSec },
-                  { key: "waitingSec", value: row.waitingSec },
-                  { key: "qualificationSec", value: row.qualificationSec },
-                  { key: "communicationSec", value: row.communicationSec },
-                ] as const;
-
-                return (
-                  <div key={row.id} className="flex min-w-[28px] flex-1 flex-col items-center gap-2">
-                    <div className="flex w-full max-w-[34px] flex-col justify-end overflow-hidden rounded-t-[0.45rem] border border-[#dfe7ef] bg-[#f4f7fb]">
-                      {orderedParts.map((part) => {
-                        const segment = timeSegments.find((item) => item.key === part.key);
-                        const height = Math.max((part.value / maxValue) * chartHeight, 0);
-
-                        if (!segment || height <= 0) {
-                          return null;
-                        }
-
-                        return (
-                          <div
-                            key={part.key}
-                            className={segment.color}
-                            style={{ height: `${height}px` }}
-                            title={`${row.name}: ${segment.label} ${formatReportingDurationFromSeconds(part.value)}`}
-                          />
-                        );
-                      })}
-                    </div>
-                    <div className="w-16 -rotate-[28deg] origin-top-left pt-1 text-left text-[10px] leading-4 text-[#54677b]">
-                      {row.name || row.id}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <StatusBadge value={value ? "Actif" : "Inactif"} compact />;
 }
 
 export default function Page() {
-  const { agentsProductivityData, isLoading, error, loadAgentsProductivity } =
-    useAgentsProductivity();
-  const [filters, setFilters] = useState<ReportingAgentsProductivityParams>({
+  const { sessionsHistoryData, isLoading, error, loadSessionsHistory } =
+    useSessionsHistoryReporting();
+  const { users, hasLoadedUsers } = useUsers();
+  const [filters, setFilters] = useState<ReportingDashboardParams>({
     from: "",
     to: "",
+    agent_id: "",
   });
 
   useEffect(() => {
-    void loadAgentsProductivity().catch(() => undefined);
-  }, [loadAgentsProductivity]);
+    void loadSessionsHistory().catch(() => undefined);
+  }, [loadSessionsHistory]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     try {
-      await loadAgentsProductivity(filters);
+      await loadSessionsHistory(filters);
     } catch {
       return;
     }
   }
 
   async function handleReset() {
-    const nextFilters = { from: "", to: "" };
+    const nextFilters: ReportingDashboardParams = {
+      from: "",
+      to: "",
+      agent_id: "",
+    };
+
     setFilters(nextFilters);
 
     try {
-      await loadAgentsProductivity();
+      await loadSessionsHistory(nextFilters);
     } catch {
       return;
     }
   }
 
-  const rows = useMemo(() => buildRows(agentsProductivityData), [agentsProductivityData]);
-
-  const totals = useMemo(
+  const agentOptions = useMemo(
     () =>
-      rows.reduce(
-        (accumulator, row) => {
-          accumulator.communicationSec += row.communicationSec;
-          accumulator.qualificationSec += row.qualificationSec;
-          accumulator.waitingSec += row.waitingSec;
-          accumulator.pauseSec += row.pauseSec;
-          accumulator.workingDurationSec += row.workingDurationSec;
-          return accumulator;
-        },
-        {
-          communicationSec: 0,
-          qualificationSec: 0,
-          waitingSec: 0,
-          pauseSec: 0,
-          workingDurationSec: 0,
-        },
-      ),
-    [rows],
+      users
+        .filter((user) => user.role === "agent")
+        .map((user) => ({
+          id: user.id,
+          name: `${user.firstName} ${user.lastName}`.trim() || user.username,
+          isActive: user.status === "active",
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [users],
   );
+
+  const rows = useMemo(() => buildSessionRows(sessionsHistoryData), [sessionsHistoryData]);
+
+  const metrics = useMemo(() => {
+    const distinctAgents = new Set(rows.map((row) => row.id)).size;
+    const sessionsCount = rows.length;
+    const totalConnectedTime = rows.reduce((sum, row) => sum + row.totalConnectedTime, 0);
+    const totalPauses = rows.reduce((sum, row) => sum + row.pausesCount, 0);
+    const totalPauseDuration = rows.reduce((sum, row) => sum + row.pauseDuration, 0);
+
+    return {
+      distinctAgents,
+      sessionsCount,
+      totalConnectedTime,
+      totalPauses,
+      totalPauseDuration,
+      averageConnectedTimePerSession:
+        sessionsCount > 0 ? totalConnectedTime / sessionsCount : 0,
+    };
+  }, [rows]);
+
+  const selectedAgentName = useMemo(() => {
+    const selectedAgentId = filters.agent_id?.trim();
+    if (!selectedAgentId) {
+      return null;
+    }
+
+    return agentOptions.find((agent) => agent.id === selectedAgentId)?.name ?? null;
+  }, [agentOptions, filters.agent_id]);
 
   const dateRangeLabel = useMemo(
-    () => formatReportingDateRange(agentsProductivityData?.period, filters),
-    [agentsProductivityData, filters],
+    () => formatReportingDateRange(sessionsHistoryData?.period, filters),
+    [filters, sessionsHistoryData?.period],
   );
+
+  const isEmpty = !isLoading && !error && rows.length === 0;
 
   return (
     <ReportingPageLayout
       eyebrow="Admin workspace"
-      title="Suivi du temps agents"
-      description="Lecture V1 des temps agents inspiree Phingo, basee uniquement sur les durees reelles exposees par le backend."
+      title="Historique des sessions"
+      description="Lecture V1 des sessions agents basée sur l'endpoint backend sessions-history."
       actions={<DateRangePill value={dateRangeLabel} />}
     >
       <ReportingFilters
-        description="Recharge du suivi du temps agents sur la plage de dates souhaitee."
+        description="Recharge l'historique réel des sessions agents sur la plage de dates souhaitée."
         from={filters.from ?? ""}
         to={filters.to ?? ""}
+        extraFields={
+          <label className="space-y-2">
+            <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6b7e92]">
+              Agent
+            </span>
+            <Select
+              value={filters.agent_id ?? ""}
+              className="h-10 rounded-xl border-[#dce6f0] bg-white px-3 text-sm text-[#102033]"
+              disabled={!hasLoadedUsers}
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  agent_id: event.target.value,
+                }))
+              }
+            >
+              <option value="">Tous les agents</option>
+              {agentOptions.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                  {agent.isActive ? "" : " (inactif)"}
+                </option>
+              ))}
+            </Select>
+          </label>
+        }
         isLoading={isLoading}
         onFromChange={(value) =>
           setFilters((current) => ({
@@ -352,137 +338,132 @@ export default function Page() {
 
       {error ? <ReportingErrorState message={error} /> : null}
 
-      {isLoading && !agentsProductivityData ? (
-        <ReportingLoadingState message="Chargement du suivi du temps agents..." />
+      {isLoading && !sessionsHistoryData ? (
+        <ReportingLoadingState message="Chargement de l'historique des sessions..." />
       ) : null}
 
-      {agentsProductivityData ? (
-        rows.length > 0 ? (
-          <>
-            <KPIGrid>
-              <KPICard
-                label="Agents"
-                value={<CountText value={rows.length} />}
-                caption="Agents exploitables remontes par le backend."
-                icon={<span className="text-lg font-semibold">A</span>}
-                tone="navy"
-              />
-              <KPICard
-                label="Communication"
-                value={<DurationText value={totals.communicationSec} />}
-                caption="Temps cumule des appels agent."
-                icon={<span className="text-lg font-semibold">C</span>}
-                tone="teal"
-              />
-              <KPICard
-                label="Qualification"
-                value={<DurationText value={totals.qualificationSec} />}
-                caption="Reserve pour WRAP_UP ou duree de qualification backend."
-                icon={<span className="text-lg font-semibold">Q</span>}
-                tone="blue"
-              />
-              <KPICard
-                label="Attente"
-                value={<DurationText value={totals.waitingSec} />}
-                caption="Temps connecte hors communication, pause et qualification."
-                icon={<span className="text-lg font-semibold">At</span>}
-                tone="navy"
-              />
-              <KPICard
-                label="Pause"
-                value={<DurationText value={totals.pauseSec} />}
-                caption="Duree cumulee des pauses agents."
-                icon={<span className="text-lg font-semibold">P</span>}
-                tone="amber"
-              />
-              <KPICard
-                label="Temps connecte"
-                value={<DurationText value={totals.workingDurationSec} />}
-                caption="Base totale de connexion sur la periode."
-                icon={<span className="text-lg font-semibold">T</span>}
-                tone="blue"
-              />
-            </KPIGrid>
+      {!isLoading && !error ? (
+        <div className="space-y-6">
+          <Card className="border border-[#dce6f0] bg-white/95 shadow-none">
+            <CardContent className="flex flex-col gap-2 py-4 text-sm text-[#526277] md:flex-row md:items-center md:justify-between">
+              <p>
+                Version V1 : historique réel des sessions agents, sans reconstruction artificielle
+                depuis la productivité.
+              </p>
+              <p className="font-medium text-[#102033]">
+                {selectedAgentName ? selectedAgentName : "Tous les agents"}
+              </p>
+            </CardContent>
+          </Card>
 
-            <Card className="border border-[#dce6f0] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] shadow-[0_14px_34px_rgba(20,32,53,0.06)]">
-              <CardContent className="flex items-start gap-3 pt-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef5ff] text-[#295086]">
-                  <Info className="h-4 w-4" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium text-[#102033]">Qualification a venir</p>
-                  <p className="text-sm text-[#607287]">
-                    Le temps de qualification sera disponible quand le backend exposera WRAP_UP ou une duree de qualification.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+          {isEmpty ? (
+            <ReportingEmptyState message="Aucune session agent disponible sur cette période." />
+          ) : (
+            <>
+              <KPIGrid>
+                <KPICard
+                  label="Agents présents"
+                  value={<CountText value={metrics.distinctAgents} />}
+                  caption="Nombre d'agents distincts dans l'historique."
+                  icon={<Users className="h-5 w-5" />}
+                  tone="navy"
+                />
+                <KPICard
+                  label="Sessions chargées"
+                  value={<CountText value={metrics.sessionsCount} />}
+                  caption="Nombre total de lignes sessions-history."
+                  icon={<CalendarClock className="h-5 w-5" />}
+                  tone="blue"
+                />
+                <KPICard
+                  label="Temps connecté total"
+                  value={<DurationText value={metrics.totalConnectedTime} />}
+                  caption="Somme des temps connectés remontés par le backend."
+                  icon={<Clock3 className="h-5 w-5" />}
+                  tone="teal"
+                />
+                <KPICard
+                  label="Pauses totales"
+                  value={<CountText value={metrics.totalPauses} />}
+                  caption="Nombre cumulé de pauses sur les sessions chargées."
+                  icon={<PauseCircle className="h-5 w-5" />}
+                  tone="amber"
+                />
+                <KPICard
+                  label="Durée totale pause"
+                  value={<DurationText value={metrics.totalPauseDuration} />}
+                  caption="Temps cumulé en pause sur la période."
+                  icon={<Timer className="h-5 w-5" />}
+                  tone="blue"
+                />
+                <KPICard
+                  label="Temps moyen / session"
+                  value={<DurationText value={metrics.averageConnectedTimePerSession} />}
+                  caption="Temps connecté moyen par session chargée."
+                  icon={<Clock3 className="h-5 w-5" />}
+                  tone="navy"
+                />
+              </KPIGrid>
 
-            <Card className={REPORTING_SURFACE_CLASS}>
-              <CardHeader>
-                <CardTitle>Repartition du temps</CardTitle>
-                <CardDescription>
-                  Presentation inspiree Phingo avec barres empilees par agent.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <VerticalStackedTimelineChart rows={rows} />
-              </CardContent>
-            </Card>
-
-            <ReportingTableCard
-              title="Resume"
-              description="Vue tabulaire des temps agents V1."
-            >
-              <TableWrapper className="shadow-none">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <thead>
-                      <tr>
-                        <TableHeadCell>Agent</TableHeadCell>
-                        <TableHeadCell>Communication</TableHeadCell>
-                        <TableHeadCell>Qualification</TableHeadCell>
-                        <TableHeadCell>Attente</TableHeadCell>
-                        <TableHeadCell>Pause</TableHeadCell>
-                        <TableHeadCell>Temps connecte</TableHeadCell>
-                        <TableHeadCell>Appels traites</TableHeadCell>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row, index) => (
-                        <tr key={`${row.id}-${index}`}>
-                          <TableCell className="font-medium">
-                            {row.name || row.id || <span className="text-[#7b8da0]">—</span>}
-                          </TableCell>
-                          <TableCell>
-                            <DurationText value={row.communicationSec} />
-                          </TableCell>
-                          <TableCell>
-                            <DurationText value={row.qualificationSec} />
-                          </TableCell>
-                          <TableCell>
-                            <DurationText value={row.waitingSec} />
-                          </TableCell>
-                          <TableCell>
-                            <DurationText value={row.pauseSec} />
-                          </TableCell>
-                          <TableCell>
-                            <DurationText value={row.workingDurationSec} />
-                          </TableCell>
-                          <TableCell>
-                            <CountText value={row.handledCalls} />
-                          </TableCell>
+              <ReportingTableCard
+                title="Historique des sessions"
+                description="Vue tabulaire des sessions réelles remontées par GET /reporting/sessions-history."
+                contentClassName="pt-0"
+              >
+                <TableWrapper className="shadow-none">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <thead>
+                        <tr>
+                          <TableHeadCell>Agent</TableHeadCell>
+                          <TableHeadCell>Date</TableHeadCell>
+                          <TableHeadCell>Login</TableHeadCell>
+                          <TableHeadCell>Logout</TableHeadCell>
+                          <TableHeadCell>Temps connecté</TableHeadCell>
+                          <TableHeadCell>Nombre de pauses</TableHeadCell>
+                          <TableHeadCell>Durée pause</TableHeadCell>
+                          <TableHeadCell>Statut actif</TableHeadCell>
                         </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </div>
-              </TableWrapper>
-            </ReportingTableCard>
-          </>
-        ) : (
-          <ReportingEmptyState message="Aucun suivi de temps agent disponible sur cette periode." />
-        )
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={row.rowKey}>
+                            <TableCell className="font-medium">
+                              <div className="space-y-0.5">
+                                <p>{row.agentName}</p>
+                                {row.role ? (
+                                  <p className="text-xs text-[#6b7e92]">{row.role}</p>
+                                ) : null}
+                                {row.email ? (
+                                  <p className="text-xs text-[#8a9bae]">{row.email}</p>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell>{toDisplayDate(row.sessionDate)}</TableCell>
+                            <TableCell>{toDisplayDateTime(row.loginTime)}</TableCell>
+                            <TableCell>{toDisplayDateTime(row.logoutTime)}</TableCell>
+                            <TableCell>
+                              <DurationText value={row.totalConnectedTime} />
+                            </TableCell>
+                            <TableCell>
+                              <CountText value={row.pausesCount} />
+                            </TableCell>
+                            <TableCell>
+                              <DurationText value={row.pauseDuration} />
+                            </TableCell>
+                            <TableCell>
+                              <ActiveStatusLabel value={row.isActive} />
+                            </TableCell>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                </TableWrapper>
+              </ReportingTableCard>
+            </>
+          )}
+        </div>
       ) : null}
     </ReportingPageLayout>
   );

@@ -239,6 +239,20 @@ export interface ReportingSessionsHistoryData {
   [key: string]: ReportingValue | undefined;
 }
 
+export interface ReportingSessionHistoryRow {
+  agent_id: number;
+  agent_name: string;
+  role: string;
+  email: string | null;
+  is_active: boolean;
+  session_date: string;
+  login_time: string | null;
+  logout_time: string | null;
+  total_connected_time: number;
+  pauses_count: number;
+  pause_duration: number;
+}
+
 export type ReportingSessionsHistoryResponse =
   | ReportingSessionsHistoryData
   | ReportingValue[];
