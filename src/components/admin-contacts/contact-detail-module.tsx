@@ -1,18 +1,103 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ArrowLeft, PenSquare } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getContactFullName } from "@/features/admin-contacts/mocks/admin-contacts.mock";
-import { useAdminContacts } from "@/features/admin-contacts/hooks/use-admin-contacts";
+import { adminContactsApi } from "@/features/admin-contacts/api/admin-contacts.api";
+import type { AdminContactRecord } from "@/types/admin-contact.types";
 import { ContactStatusBadge } from "@/components/admin-contacts/contact-status-badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+function getContactFullName(contact: Pick<AdminContactRecord, "firstName" | "lastName">) {
+  const fullName = `${contact.firstName} ${contact.lastName}`.trim();
+  return fullName.length > 0 ? fullName : "Contact sans nom";
+}
+
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "Non renseignee";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export function ContactDetailModule() {
   const params = useParams<{ id: string }>();
-  const { getContactById } = useAdminContacts();
-  const contact = getContactById(params.id);
+  const [contact, setContact] = useState<AdminContactRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadContact = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const nextContact = await adminContactsApi.getContactById(params.id);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setContact(nextContact);
+      } catch (loadError) {
+        if (!isMounted) {
+          return;
+        }
+
+        setContact(null);
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Impossible de charger cette fiche contact.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadContact();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [params.id]);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-10">
+          <p className="text-sm text-[var(--muted-foreground)]">Chargement de la fiche contact...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="space-y-3 py-10">
+          <p className="text-sm font-medium text-[#24415d]">Impossible de charger la fiche contact.</p>
+          <p className="text-sm text-[var(--muted-foreground)]">{error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!contact) {
     return (
@@ -29,7 +114,7 @@ export function ContactDetailModule() {
       <PageHeader
         eyebrow="Administration CRM"
         title={getContactFullName(contact)}
-        description="Fiche contact admin V1 liee aux campagnes, listes et imports du cockpit CRM."
+        description="Fiche contact reliee au backend CRM avec lecture directe des donnees reelles disponibles."
         actions={
           <>
             <Link
@@ -54,7 +139,7 @@ export function ContactDetailModule() {
         <Card className="border border-[#dce6f0] bg-white shadow-[0_18px_42px_rgba(20,32,53,0.08)]">
           <CardHeader>
             <CardTitle>Resume contact</CardTitle>
-            <CardDescription>Vue rapide du statut, du rattachement metier et de la derniere action connue.</CardDescription>
+            <CardDescription>Vue rapide du statut CRM et des metadonnees disponibles cote backend.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-[1.25rem] border border-[#e6edf6] bg-[linear-gradient(180deg,#fbfdff_0%,#f6faff_100%)] px-4 py-4">
@@ -63,30 +148,29 @@ export function ContactDetailModule() {
                 <ContactStatusBadge status={contact.status} />
               </div>
             </div>
-            <Metric label="Campagne associee" value={contact.campaign ?? "Non renseignee"} />
-            <Metric label="Liste source" value={contact.listName ?? "Non renseignee"} />
-            <Metric label="Import source" value={contact.sourceImport ?? "Non renseigne"} />
-            <Metric label="Derniere action" value={contact.lastAction ?? "Non renseignee"} />
-            <Metric label="Derniere qualification" value={contact.lastQualification ?? "Non renseignee"} />
+            <Metric label="Source" value={contact.source ?? "Non renseignee"} />
+            <Metric label="Pays" value={contact.country ?? "Non renseigne"} />
+            <Metric label="Cree le" value={formatDate(contact.createdAt)} />
+            <Metric label="Mis a jour le" value={formatDate(contact.updatedAt)} />
           </CardContent>
         </Card>
 
         <Card className="border border-[#dce6f0] bg-white shadow-[0_18px_42px_rgba(20,32,53,0.08)]">
           <CardHeader>
             <CardTitle>Informations contact</CardTitle>
-            <CardDescription>Lecture simple de la fiche CRM front mockee pour la V1 admin.</CardDescription>
+            <CardDescription>Lecture des champs reellement exposes par `GET /contacts/:id`.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <InfoField label="Prenom" value={contact.firstName} />
-            <InfoField label="Nom" value={contact.lastName} />
-            <InfoField label="Telephone" value={contact.phone} />
+            <InfoField label="Prenom" value={contact.firstName || "Non renseigne"} />
+            <InfoField label="Nom" value={contact.lastName || "Non renseigne"} />
+            <InfoField label="Telephone" value={contact.phone || "Non renseigne"} />
             <InfoField label="Telephone 2" value={contact.phone2 ?? "Aucun"} />
             <InfoField label="Email" value={contact.email ?? "Non renseigne"} />
-            <InfoField label="Ville" value={contact.city} />
-            <InfoField label="Adresse" value={contact.address ?? "Non renseignee"} />
+            <InfoField label="Societe" value={contact.company ?? "Non renseignee"} />
+            <InfoField label="Ville" value={contact.city || "Non renseignee"} />
             <InfoField label="Code postal" value={contact.postalCode ?? "Non renseigne"} />
             <div className="md:col-span-2">
-              <InfoField label="Note courte" value={contact.note ?? "Non renseignee"} />
+              <InfoField label="Adresse" value={contact.address ?? "Non renseignee"} />
             </div>
           </CardContent>
         </Card>

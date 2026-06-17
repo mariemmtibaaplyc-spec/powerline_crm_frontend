@@ -24,9 +24,7 @@ export const CONTACT_CAMPAIGN_OPTIONS = Array.from(
   ]),
 );
 
-export const CONTACT_LIST_OPTIONS = Array.from(
-  new Set(MOCK_LISTS.map((list) => list.name)),
-);
+export const CONTACT_LIST_OPTIONS = Array.from(new Set(MOCK_LISTS.map((list) => list.name)));
 
 export const CONTACT_SOURCE_OPTIONS = Array.from(
   new Set(MOCK_IMPORTS.map((item) => item.name)),
@@ -200,17 +198,14 @@ export function createUpdatedContactPayload(
     firstName: values.firstName.trim(),
     lastName: values.lastName.trim(),
     phone: values.phone.trim(),
-    phone2: values.phone2?.trim() ? values.phone2.trim() : null,
-    email: values.email?.trim() ? values.email.trim().toLowerCase() : null,
-    address: values.address?.trim() ? values.address.trim() : null,
+    phone2: values.phone2.trim() ? values.phone2.trim() : null,
+    email: values.email.trim() ? values.email.trim().toLowerCase() : null,
+    company: values.company.trim() ? values.company.trim() : null,
+    address: values.address.trim() ? values.address.trim() : null,
     city: values.city.trim(),
-    postalCode: values.postalCode?.trim() ? values.postalCode.trim() : null,
-    campaign: values.campaign,
-    listName: values.listName,
-    sourceImport: values.sourceImport,
+    postalCode: values.postalCode.trim() ? values.postalCode.trim() : null,
+    source: values.source.trim() ? values.source.trim() : null,
+    country: values.country.trim() ? values.country.trim() : null,
     status: values.status,
-    lastAction: values.lastAction.trim(),
-    lastQualification: values.lastQualification.trim(),
-    note: values.note.trim(),
   };
 }

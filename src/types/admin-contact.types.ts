@@ -57,16 +57,28 @@ export interface AdminContactFormValues {
   firstName: string;
   lastName: string;
   phone: string;
+  phone2: string;
+  email: string;
+  company: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  source: string;
+  country: string;
+  status: ContactStatus;
+}
+
+export interface AdminContactUpdatePayload {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
   phone2?: string;
   email?: string;
+  company?: string;
   address?: string;
-  city: string;
-  postalCode?: string;
-  campaign: string;
-  listName: string;
-  sourceImport: string;
-  status: ContactStatus;
-  lastAction: string;
-  lastQualification: string;
-  note: string;
+  city?: string;
+  postal_code?: string;
+  source?: string;
+  country?: string;
+  status?: ContactStatus;
 }

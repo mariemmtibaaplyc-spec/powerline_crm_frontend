@@ -1,59 +1,130 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ArrowLeft, PenSquare } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useAdminContacts } from "@/features/admin-contacts/hooks/use-admin-contacts";
-import type { AdminContactFormValues } from "@/types/admin-contact.types";
+import { adminContactsApi } from "@/features/admin-contacts/api/admin-contacts.api";
+import type { AdminContactFormValues, AdminContactRecord } from "@/types/admin-contact.types";
 import { ContactForm } from "@/components/admin-contacts/contact-form";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 
-export function ContactEditModule() {
-  const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const { getContactById, updateContact } = useAdminContacts();
-  const contact = getContactById(params.id);
-
-  if (!contact) {
-    return (
-      <Card>
-        <CardContent className="py-10">
-          <p className="text-sm text-[var(--muted-foreground)]">Contact introuvable.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const initialValues: AdminContactFormValues = {
+function createInitialValues(contact: AdminContactRecord): AdminContactFormValues {
+  return {
     firstName: contact.firstName,
     lastName: contact.lastName,
     phone: contact.phone,
     phone2: contact.phone2 ?? "",
     email: contact.email ?? "",
+    company: contact.company ?? "",
     address: contact.address ?? "",
     city: contact.city,
     postalCode: contact.postalCode ?? "",
-    campaign: contact.campaign ?? "",
-    listName: contact.listName ?? "",
-    sourceImport: contact.sourceImport ?? "",
+    source: contact.source ?? "",
+    country: contact.country ?? "",
     status: contact.status,
-    lastAction: contact.lastAction ?? "",
-    lastQualification: contact.lastQualification ?? "",
-    note: contact.note ?? "",
+  };
+}
+
+export function ContactEditModule() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [contact, setContact] = useState<AdminContactRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadContact = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const nextContact = await adminContactsApi.getContactById(params.id);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setContact(nextContact);
+      } catch (loadError) {
+        if (!isMounted) {
+          return;
+        }
+
+        setContact(null);
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Impossible de charger cette fiche contact.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadContact();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [params.id]);
+
+  const handleSubmit = async (values: AdminContactFormValues) => {
+    if (!contact) {
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const updatedContact = await adminContactsApi.updateContact(contact.id, values);
+      setContact(updatedContact);
+      router.push(`/admin/contacts/${contact.id}`);
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Impossible d'enregistrer les modifications.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSubmit = (values: AdminContactFormValues) => {
-    updateContact(contact.id, values);
-    router.push(`/admin/contacts/${contact.id}`);
-  };
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-10">
+          <p className="text-sm text-[var(--muted-foreground)]">Chargement du contact...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!contact) {
+    return (
+      <Card>
+        <CardContent className="space-y-3 py-10">
+          <p className="text-sm font-medium text-[#24415d]">Contact introuvable.</p>
+          {error ? <p className="text-sm text-[var(--muted-foreground)]">{error}</p> : null}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <section className="space-y-6">
       <PageHeader
         eyebrow="Administration CRM"
         title="Modifier contact"
-        description="Edition admin V1 d une fiche contact synchronisee avec les campagnes, les listes et les imports CRM."
+        description="Edition de la fiche contact via les champs reellement supportes par le backend CRM."
         actions={
           <>
             <Link
@@ -65,12 +136,25 @@ export function ContactEditModule() {
             </Link>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#dce7f3] bg-white px-3 py-2 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)]">
               <PenSquare className="h-4 w-4 text-[#295086]" />
-              Edition V1
+              Edition backend V1
             </span>
           </>
         }
       />
-      <ContactForm initialValues={initialValues} onSubmit={handleSubmit} />
+
+      {error ? (
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-sm text-[#b55a72]">{error}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <ContactForm
+        initialValues={createInitialValues(contact)}
+        onSubmit={handleSubmit}
+        isSubmitting={isSaving}
+      />
     </section>
   );
 }

@@ -1,8 +1,10 @@
 import axios from "axios";
 import { apiClient } from "@/lib/axios";
 import type {
+  AdminContactFormValues,
   AdminContactRecord,
   AdminContactsMeta,
+  AdminContactUpdatePayload,
   LoadAdminContactsParams,
 } from "@/types/admin-contact.types";
 
@@ -40,7 +42,11 @@ function getBackendErrorMessage(error: unknown): string | null {
   }
 
   if (error.response?.status === 401) {
-    return "Session expirée, reconnectez-vous";
+    return "Session expiree, reconnectez-vous";
+  }
+
+  if (error.response?.status === 404) {
+    return "Contact introuvable.";
   }
 
   const responseData = error.response?.data;
@@ -88,6 +94,28 @@ function mapBackendContact(contact: BackendContact): AdminContactRecord {
       contact.custom_fields && typeof contact.custom_fields === "object"
         ? contact.custom_fields
         : undefined,
+  };
+}
+
+function normalizeOptionalValue(value: string) {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function mapContactUpdatePayload(values: AdminContactFormValues): AdminContactUpdatePayload {
+  return {
+    first_name: values.firstName.trim(),
+    last_name: values.lastName.trim(),
+    phone: values.phone.trim(),
+    phone2: normalizeOptionalValue(values.phone2),
+    email: normalizeOptionalValue(values.email),
+    company: normalizeOptionalValue(values.company),
+    address: normalizeOptionalValue(values.address),
+    city: values.city.trim(),
+    postal_code: normalizeOptionalValue(values.postalCode),
+    source: normalizeOptionalValue(values.source),
+    country: normalizeOptionalValue(values.country),
+    status: values.status,
   };
 }
 
@@ -155,6 +183,31 @@ export const adminContactsApi = {
       throw new Error(
         getBackendErrorMessage(error) ||
           "Impossible de charger les contacts pour le moment.",
+      );
+    }
+  },
+
+  async getContactById(id: string): Promise<AdminContactRecord> {
+    try {
+      const { data } = await apiClient.get<BackendContact>(`/contacts/${id}`);
+      return mapBackendContact(data);
+    } catch (error) {
+      throw new Error(
+        getBackendErrorMessage(error) ||
+          "Impossible de charger cette fiche contact pour le moment.",
+      );
+    }
+  },
+
+  async updateContact(id: string, values: AdminContactFormValues): Promise<AdminContactRecord> {
+    try {
+      const payload = mapContactUpdatePayload(values);
+      const { data } = await apiClient.patch<BackendContact>(`/contacts/${id}`, payload);
+      return mapBackendContact(data);
+    } catch (error) {
+      throw new Error(
+        getBackendErrorMessage(error) ||
+          "Impossible de mettre a jour ce contact pour le moment.",
       );
     }
   },
