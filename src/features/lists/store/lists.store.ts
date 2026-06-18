@@ -2,7 +2,6 @@
 
 import { create } from "zustand";
 import { listsApi } from "@/features/lists/api/lists.api";
-import { createListPayload } from "@/features/lists/mocks/lists.mock";
 import type {
   ListContactRecord,
   ListFormValues,
@@ -34,7 +33,6 @@ interface ListsStoreState {
     listId: string,
     params?: LoadListContactsParams,
   ) => Promise<void>;
-  createList: (values: ListFormValues) => string;
   updateList: (id: string, values: ListFormValues) => void;
   updateListStatusAction: (id: string, status: ListStatus) => Promise<void>;
   getListById: (id: string) => ListRecord | undefined;
@@ -156,13 +154,6 @@ export const useListsStore = create<ListsStoreState>((set, get) => ({
         selectedListContactsError: "Impossible de charger les contacts de la liste.",
       });
     }
-  },
-  createList: (values) => {
-    const nextList = createListPayload(values);
-    set((state) => ({
-      lists: [nextList, ...state.lists],
-    }));
-    return nextList.id;
   },
   updateList: (id, values) => {
     set((state) => ({

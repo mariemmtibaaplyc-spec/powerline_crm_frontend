@@ -1,10 +1,30 @@
 import { z } from "zod";
 
-export const importSetupSchema = z.object({
-  name: z.string().trim().min(3, "Le nom de l import est requis"),
-  sourceFile: z.string().trim().min(1, "Le fichier source est requis"),
-  listName: z.string().trim().min(2, "La liste associee est requise"),
-});
+export const importSetupSchema = z
+  .object({
+    name: z.string().trim().min(3, "Le nom de l import est requis"),
+    sourceFile: z.string().trim().min(1, "Le fichier source est requis"),
+    listName: z.string().trim().optional(),
+    targetListId: z.string().trim().optional(),
+    targetListMode: z.enum(["existing", "new"]),
+  })
+  .superRefine((value, ctx) => {
+    if (value.targetListMode === "existing" && !value.targetListId?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["targetListId"],
+        message: "La liste associee est requise",
+      });
+    }
+
+    if (value.targetListMode === "new" && !value.listName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["listName"],
+        message: "La liste associee est requise",
+      });
+    }
+  });
 
 export const importParametersSchema = z.object({
   estimatedRows: z.string().trim().min(1, "Le volume estime est requis"),

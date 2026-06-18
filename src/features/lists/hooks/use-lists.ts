@@ -21,7 +21,6 @@ export function useLists(params?: LoadListsParams) {
   const loadLists = useListsStore((state) => state.loadLists);
   const loadListById = useListsStore((state) => state.loadListById);
   const loadListContacts = useListsStore((state) => state.loadListContacts);
-  const createList = useListsStore((state) => state.createList);
   const updateList = useListsStore((state) => state.updateList);
   const updateListStatusAction = useListsStore((state) => state.updateListStatusAction);
   const getListById = useListsStore((state) => state.getListById);
@@ -49,7 +48,6 @@ export function useLists(params?: LoadListsParams) {
     loadLists,
     loadListById,
     loadListContacts,
-    createList,
     updateList,
     updateListStatusAction,
     getListById,

@@ -62,10 +62,10 @@ export function ListsModule() {
               {readyCount} pretes
             </span>
             <Link
-              href="/admin/lists/create"
+              href="/admin/imports/new"
               className="inline-flex h-11 items-center justify-center rounded-full bg-[var(--primary)] px-5 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_18px_40px_rgba(36,80,166,0.22)] transition hover:-translate-y-0.5 hover:opacity-95"
             >
-              Creer une liste
+              Importer vers une liste
             </Link>
           </>
         }

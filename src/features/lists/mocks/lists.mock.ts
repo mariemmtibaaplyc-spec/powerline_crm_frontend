@@ -1,4 +1,4 @@
-import type { ListFormValues, ListRecord, ListStatus, ListType } from "@/types/list.types";
+import type { ListRecord, ListStatus, ListType } from "@/types/list.types";
 
 export const LIST_TYPE_OPTIONS: Array<{ value: ListType; label: string }> = [
   { value: "prospects", label: "Base prospects" },
@@ -106,20 +106,4 @@ export function getListTypeLabel(type: ListType) {
 
 export function getListStatusLabel(status: ListStatus) {
   return LIST_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
-}
-
-export function createListPayload(values: ListFormValues): ListRecord {
-  return {
-    id: `lst-${Date.now()}`,
-    name: values.name.trim(),
-    type: values.type,
-    source: values.source.trim(),
-    status: values.status,
-    campaign: values.campaign.trim(),
-    contactsCount: Number(values.contactsCount) || 0,
-    hasContactsCount: true,
-    importedAt: new Date().toISOString().slice(0, 10),
-    description: values.description.trim(),
-    columnsPreview: ["Nom", "Telephone", "Campagne", "Statut"],
-  };
 }

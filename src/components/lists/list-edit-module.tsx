@@ -62,7 +62,7 @@ export function ListEditModule() {
           </>
         }
       />
-      <ListForm mode="edit" initialValues={initialValues} onSubmit={handleSubmit} />
+      <ListForm initialValues={initialValues} onSubmit={handleSubmit} />
     </section>
   );
 }

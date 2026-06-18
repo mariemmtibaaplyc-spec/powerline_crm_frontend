@@ -473,13 +473,12 @@ export const importsApi = {
     formData.append("deduplicationScope", payload.deduplicationScope);
     formData.append("columnMapping", JSON.stringify(payload.columnMapping));
 
-    if (payload.listId) {
-      formData.append("listId", payload.listId);
+    if (payload.targetListId) {
+      formData.append("targetListId", payload.targetListId);
     }
 
-    if (payload.targetListId) {
-      // Import worker owns list creation for new import lists.
-      formData.append("targetListId", payload.targetListId);
+    if (payload.deduplicationListId) {
+      formData.append("deduplicationListId", payload.deduplicationListId);
     }
 
     try {

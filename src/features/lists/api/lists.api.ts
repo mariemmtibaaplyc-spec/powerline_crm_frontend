@@ -43,12 +43,6 @@ type GetListByIdResponse = {
   data?: BackendList;
 };
 
-type CreateListResponse =
-  | BackendList
-  | {
-      data?: BackendList;
-    };
-
 type BackendListContact = {
   id: string | number;
   first_name?: string | null;
@@ -300,23 +294,6 @@ export const listsApi = {
 
     if (!item || typeof item !== "object") {
       throw new Error("Liste introuvable.");
-    }
-
-    return mapBackendList(item);
-  },
-  async createList(values: ListFormValues): Promise<ListRecord> {
-    const payload = {
-      name: values.name.trim(),
-    };
-
-    const { data } = await apiClient.post<CreateListResponse>("/lists", payload);
-    const item =
-      "data" in data && data.data
-        ? data.data
-        : (data as BackendList);
-
-    if (!item || typeof item !== "object") {
-      throw new Error("Impossible de creer la liste.");
     }
 
     return mapBackendList(item);

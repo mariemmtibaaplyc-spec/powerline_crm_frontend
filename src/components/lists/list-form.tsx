@@ -27,11 +27,9 @@ const emptyValues: ListFormValues = {
 };
 
 export function ListForm({
-  mode,
   initialValues = emptyValues,
   onSubmit,
 }: {
-  mode: "create" | "edit";
   initialValues?: ListFormValues;
   onSubmit: (values: ListFormValues) => void;
 }) {
@@ -72,13 +70,9 @@ export function ListForm({
   return (
     <Card className="border border-[#dce6f0] bg-white shadow-[0_18px_42px_rgba(20,32,53,0.08)]">
       <CardHeader>
-        <CardTitle>
-          {mode === "create" ? "Nouvelle liste CRM" : "Modifier la liste"}
-        </CardTitle>
+        <CardTitle>Modifier la liste</CardTitle>
         <CardDescription>
-          {mode === "create"
-            ? "Creation V1 d une liste admin avec source, statut, campagne et volumetrie."
-            : "Mise a jour des metadonnees et du rattachement de la liste dans le CRM."}
+          Mise a jour des metadonnees et du rattachement de la liste dans le CRM.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -190,9 +184,7 @@ export function ListForm({
           />
 
           <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#edf2f7] pt-5">
-            <Button type="submit">
-              {mode === "create" ? "Creer la liste" : "Enregistrer les modifications"}
-            </Button>
+            <Button type="submit">Enregistrer les modifications</Button>
           </div>
         </form>
       </CardContent>

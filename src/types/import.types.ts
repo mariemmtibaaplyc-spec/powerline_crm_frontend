@@ -49,8 +49,8 @@ export interface UploadImportPreviewPayload {
   listName: string;
   deduplicationScope: DeduplicationScopeBackend;
   columnMapping: Record<string, string>;
-  listId?: string;
   targetListId?: string;
+  deduplicationListId?: string;
 }
 
 export interface ImportPreviewStats {
@@ -107,6 +107,7 @@ export interface ImportWizardValues {
   name: string;
   sourceFile: string;
   listName: string;
+  targetListId: string;
   estimatedRows: string;
   separator: string;
   encoding: string;

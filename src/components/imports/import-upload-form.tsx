@@ -10,7 +10,6 @@ export function ImportUploadForm({
   errors,
   listOptions,
   targetListMode,
-  selectedExistingListId,
   isDetecting,
   onChange,
   onTargetListModeChange,
@@ -23,7 +22,6 @@ export function ImportUploadForm({
   errors: Record<string, string>;
   listOptions: Array<{ id: string; name: string }>;
   targetListMode: "existing" | "new";
-  selectedExistingListId: string;
   isDetecting: boolean;
   onChange: <Key extends keyof ImportWizardValues>(key: Key, value: ImportWizardValues[Key]) => void;
   onTargetListModeChange: (value: "existing" | "new") => void;
@@ -92,11 +90,11 @@ export function ImportUploadForm({
         />
         <Field
           label={targetListMode === "existing" ? "Liste cible" : "Nom de la nouvelle liste"}
-          error={errors.listName}
+          error={errors.targetListId ?? errors.listName}
           input={
             targetListMode === "existing" ? (
               <Select
-                value={selectedExistingListId}
+                value={values.targetListId}
                 className="h-11 rounded-2xl border-[var(--border)] bg-white/80 px-4 text-[#102033]"
                 onChange={(event) => onExistingListChange(event.target.value)}
               >

@@ -29,6 +29,7 @@ const initialValues: ImportWizardValues = {
   name: "",
   sourceFile: "",
   listName: "",
+  targetListId: "",
   estimatedRows: "0",
   separator: "Point-virgule (;)",
   encoding: "UTF-8",
@@ -106,7 +107,6 @@ export function ImportWizardModule() {
   const [values, setValues] = useState<ImportWizardValues>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [targetListMode, setTargetListMode] = useState<"existing" | "new">("existing");
-  const [selectedExistingListId, setSelectedExistingListId] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const selectedFileRef = useRef<File | null>(null);
   const [detection, setDetection] = useState<ImportDetectionResult | null>(null);
@@ -139,11 +139,14 @@ export function ImportWizardModule() {
       return;
     }
 
-    const selectedStillExists = listOptions.some((option) => option.id === selectedExistingListId);
+    const selectedStillExists = listOptions.some((option) => option.id === values.targetListId);
     if (!selectedStillExists) {
-      setSelectedExistingListId(listOptions[0]?.id ?? "");
+      setValues((current) => ({
+        ...current,
+        targetListId: listOptions[0]?.id ?? "",
+      }));
     }
-  }, [listOptions, selectedExistingListId, targetListMode]);
+  }, [listOptions, targetListMode, values.targetListId]);
 
   const handleChange = <Key extends keyof ImportWizardValues>(
     key: Key,
@@ -160,32 +163,33 @@ export function ImportWizardModule() {
     setErrors((current) => {
       const nextErrors = { ...current };
       delete nextErrors.listName;
+      delete nextErrors.targetListId;
       return nextErrors;
     });
 
     if (nextMode === "existing") {
-      if (!selectedExistingListId && listOptions[0]) {
-        setSelectedExistingListId(listOptions[0].id);
-      }
       setValues((current) => ({
         ...current,
         listName: "",
+        targetListId: current.targetListId || listOptions[0]?.id || "",
       }));
       return;
     }
 
-    setSelectedExistingListId("");
+    setValues((current) => ({
+      ...current,
+      targetListId: "",
+    }));
   };
 
   const handleExistingListChange = (listId: string) => {
-    setSelectedExistingListId(listId);
     setValues((current) => ({
       ...current,
-      listName: "",
+      targetListId: listId,
     }));
     setErrors((current) => {
       const nextErrors = { ...current };
-      delete nextErrors.listName;
+      delete nextErrors.targetListId;
       return nextErrors;
     });
   };
@@ -196,14 +200,10 @@ export function ImportWizardModule() {
 
   const runValidation = () => {
     if (step === 1) {
-      return importSetupSchema.safeParse(
-        targetListMode === "existing"
-          ? {
-              ...values,
-              listName: selectedExistingListId || values.listName,
-            }
-          : values,
-      );
+      return importSetupSchema.safeParse({
+        ...values,
+        targetListMode,
+      });
     }
     if (step === 2) {
       return importParametersSchema.safeParse(values);
@@ -237,18 +237,18 @@ export function ImportWizardModule() {
 
       if (targetListMode === "existing") {
         if (isLoadingLists) {
-          setErrors({ listName: "Chargement des listes en cours. Reessaie dans un instant." });
+          setErrors({ targetListId: "Chargement des listes en cours. Reessaie dans un instant." });
           return;
         }
 
         if (listsError) {
-          setErrors({ listName: listsError });
+          setErrors({ targetListId: listsError });
           return;
         }
 
-        const selectedTargetList = lists.find((item) => item.id === selectedExistingListId);
+        const selectedTargetList = lists.find((item) => item.id === values.targetListId);
         if (!selectedTargetList) {
-          setErrors({ listName: "Selectionne une liste cible existante." });
+          setErrors({ targetListId: "Selectionne une liste cible existante." });
           return;
         }
 
@@ -334,8 +334,9 @@ export function ImportWizardModule() {
           file: currentFile,
           listName: values.listName,
           deduplicationScope,
-          listId: deduplicationScope === "SPECIFIC_LIST" ? specificList?.id : undefined,
-          targetListId: targetListMode === "existing" ? selectedExistingListId || undefined : undefined,
+          targetListId: targetListMode === "existing" ? values.targetListId || undefined : undefined,
+          deduplicationListId:
+            deduplicationScope === "SPECIFIC_LIST" ? specificList?.id : undefined,
           columnMapping: normalizedMapping,
         });
 
@@ -500,15 +501,14 @@ export function ImportWizardModule() {
         </CardHeader>
         <CardContent className="space-y-6">
           {step === 1 ? (
-            <ImportUploadForm
-              values={values}
-              errors={errors}
-              listOptions={listOptions}
-              targetListMode={targetListMode}
-              selectedExistingListId={selectedExistingListId}
-              isDetecting={isDetectingFile}
-              onChange={handleChange}
-              onTargetListModeChange={handleTargetListModeChange}
+                <ImportUploadForm
+                  values={values}
+                  errors={errors}
+                  listOptions={listOptions}
+                  targetListMode={targetListMode}
+                  isDetecting={isDetectingFile}
+                  onChange={handleChange}
+                  onTargetListModeChange={handleTargetListModeChange}
               onExistingListChange={handleExistingListChange}
               onNewListNameChange={handleNewListNameChange}
               onFileChange={handleFileChange}
