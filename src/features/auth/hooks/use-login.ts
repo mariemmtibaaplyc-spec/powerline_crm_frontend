@@ -18,8 +18,21 @@ export function useLogin() {
 
       try {
         const session = await authApi.login(payload);
-        setAuthSession(session);
-        setSession(session);
+        const meData = await authApi.getMe();
+        const enrichedSession = {
+          ...session,
+          user: {
+            ...session.user,
+            ...meData,
+            // Garder les champs login si getMe échoue
+            id: meData.id ?? session.user.id,
+            numericId: meData.numericId ?? session.user.numericId,
+            sip_extension: meData.sip_extension ?? session.user.sip_extension ?? null,
+          },
+        };
+
+        setAuthSession(enrichedSession);
+        setSession(enrichedSession);
         localStorage.setItem("accessToken", session.accessToken);
 
         if (session.refreshToken) {

@@ -205,4 +205,52 @@ export const monitoringApi = {
       throw toApiError(error, "Impossible de charger les alertes de supervision.");
     }
   },
+  // ── Supervision actions (écoute / whisper / barge / raccroc) ─────────────
+
+  async joinCall(params: {
+    call_id: number;
+    supervisor_ext: string;
+    mode: 'listen' | 'whisper' | 'barge';
+  }): Promise<{ message: string }> {
+    try {
+      const { data } = await apiClient.post(
+        `/supervision/calls/${params.call_id}/join`,
+        { supervisor_ext: params.supervisor_ext, mode: params.mode },
+      );
+      return unwrapPayload(data) as { message: string };
+    } catch (error) {
+      throw toApiError(error, "Impossible de rejoindre l'appel en supervision.");
+    }
+  },
+
+  async changeMode(params: {
+    call_id: number;
+    supervisor_ext: string;
+    new_mode: 'listen' | 'whisper' | 'barge';
+  }): Promise<{ message: string }> {
+    try {
+      const { data } = await apiClient.post(
+        `/supervision/calls/${params.call_id}/mode`,
+        { supervisor_ext: params.supervisor_ext, new_mode: params.new_mode },
+      );
+      return unwrapPayload(data) as { message: string };
+    } catch (error) {
+      throw toApiError(error, "Impossible de changer le mode de supervision.");
+    }
+  },
+
+  async leaveCall(params: {
+    call_id: number;
+    supervisor_ext: string;
+  }): Promise<{ message: string }> {
+    try {
+      const { data } = await apiClient.delete(
+        `/supervision/calls/${params.call_id}/leave`,
+        { data: { supervisor_ext: params.supervisor_ext } },
+      );
+      return unwrapPayload(data) as { message: string };
+    } catch (error) {
+      throw toApiError(error, "Impossible de quitter la supervision.");
+    }
+  },
 };

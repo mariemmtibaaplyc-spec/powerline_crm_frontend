@@ -8,17 +8,24 @@ export function AgentQualificationPanel() {
   const {
     currentStatusMeta,
     closeQualification,
-    qualificationGroups,
     qualificationPanelOpen,
-    selectQualification,
-    selectedQualification,
+
+    backendQualifications,
+    selectedQualificationId,
+    selectBackendQualification,
   } = useAgentWorkspaceState();
 
   if (!qualificationPanelOpen) {
     return null;
   }
+  const groups = [
+  {
+    title: "Qualifications",
+    items: backendQualifications.filter((q) => q.is_active),
+  },
+];
 
-  const canSubmitQualification = selectedQualification !== null;
+const canSubmitQualification = selectedQualificationId !== null;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[35]">
@@ -57,37 +64,34 @@ export function AgentQualificationPanel() {
           </div>
 
           <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
-            {qualificationGroups.map((group) => (
-              <section key={group.title}>
-                <div className="flex items-center gap-2">
-                  <Tags className="h-4 w-4 text-[#f0b57d]" />
-                  <h4 className="text-sm font-semibold text-white">
-                    {group.title}
-                  </h4>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {group.items.map((item) => {
-                    const active = selectedQualification === item.code;
-
-                    return (
-                      <button
-                        key={item.code}
-                        type="button"
-                        onClick={() => selectQualification(item.code)}
-                        className={cn(
-                          "rounded-[1rem] border px-3 py-3 text-left text-sm font-medium transition",
-                          active
-                            ? "border-[#d99154]/24 bg-[#fff4e8]/10 text-white shadow-[0_12px_24px_rgba(217,145,84,0.12)]"
-                            : "border-white/8 bg-white/[0.045] text-white/74 hover:border-white/12 hover:bg-white/[0.075] hover:text-white",
-                        )}
-                      >
-                        {item.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
+            {groups.map((group) => (
+  <section key={group.title}>
+    <div className="flex items-center gap-2">
+      <Tags className="h-4 w-4 text-[#f0b57d]" />
+      <h4 className="text-sm font-semibold text-white">{group.title}</h4>
+    </div>
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {group.items.map((item) => {
+        const active = selectedQualificationId === item.id;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => selectBackendQualification(item)}
+            className={cn(
+              "rounded-[1rem] border px-3 py-3 text-left text-sm font-medium transition",
+              active
+                ? "border-[#d99154]/24 bg-[#fff4e8]/10 text-white shadow-[0_12px_24px_rgba(217,145,84,0.12)]"
+                : "border-white/8 bg-white/[0.045] text-white/74 hover:border-white/12 hover:bg-white/[0.075] hover:text-white",
+            )}
+          >
+            {item.name}
+          </button>
+        );
+      })}
+    </div>
+  </section>
+))}
           </div>
 
           <div className="border-t border-white/8 bg-[rgba(255,255,255,0.03)] px-5 py-4 sm:px-6">
@@ -96,10 +100,8 @@ export function AgentQualificationPanel() {
                 Qualification selectionnee
               </p>
               <p className="mt-2 text-sm font-medium text-white">
-                {qualificationGroups
-                  .flatMap((group) => group.items)
-                  .find((item) => item.code === selectedQualification)?.label ||
-                  "Aucune qualification choisie"}
+               {backendQualifications.find((q) => q.id === selectedQualificationId)?.name
+  ?? "Aucune qualification choisie"}
               </p>
             </div>
 

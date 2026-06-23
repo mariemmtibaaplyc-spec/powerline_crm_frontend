@@ -2,6 +2,29 @@ import axios from "axios";
 import { apiClient } from "@/lib/axios";
 import type { AuthSession, LoginPayload, SessionUser, UserRole } from "@/types/auth.types";
 
+/**
+ * Extrait l'identifiant numérique d'une réponse Backend, en essayant tous les
+ * noms de champs courants : sub (JWT), id, userId, user_id, numericId.
+ * Retourne null si aucun n'est trouvé ou si la valeur n'est pas un entier > 0.
+ */
+function extractNumericId(data: Record<string, any>): number | null {
+  const raw =
+    data.sub ??
+    data.id ??
+    data.userId ??
+    data.user_id ??
+    data.numericId ??
+    data.user?.sub ??
+    data.user?.id ??
+    data.user?.userId ??
+    data.user?.user_id ??
+    null;
+
+  if (raw == null) return null;
+  const n = typeof raw === "number" ? raw : parseInt(String(raw), 10);
+  return !isNaN(n) && n > 0 ? n : null;
+}
+
 type BackendLoginResponse = {
   accessToken?: string;
   access_token?: string;
@@ -71,17 +94,33 @@ function mapBackendSession(
   const email = user.email ?? user.username ?? response.email ?? response.username ?? payload.email;
   const role = normalizeRole(user.role ?? response.role);
 
-  return {
-    accessToken,
-    refreshToken,
-    user: {
-      id: String(user.id ?? response.id ?? email),
-      firstName: user.firstName ?? response.firstName ?? namesFromFullName.firstName,
-      lastName: user.lastName ?? response.lastName ?? namesFromFullName.lastName,
-      email,
-      role,
-    },
-  };
+  // Cherche l'ID dans user d'abord, puis à la racine de la réponse
+  const numericId =
+    extractNumericId(user as Record<string, any>) ??
+    extractNumericId(response as Record<string, any>) ??
+    0;
+
+  if (numericId === 0) {
+    console.warn("[mapBackendSession] numericId=0 — champ ID non trouvé dans la réponse backend.", { user, response });
+  }
+
+  const rawId = (user as any).id ?? (response as any).id ?? String(numericId || email);
+  const sip_extension =
+    (user as any).sip_extension ?? (response as any).sip_extension ?? null;
+
+return {
+  accessToken,
+  refreshToken,
+  user: {
+    id: String(rawId),
+    numericId,
+    firstName: user.firstName ?? response.firstName ?? namesFromFullName.firstName,
+    lastName: user.lastName ?? response.lastName ?? namesFromFullName.lastName,
+    email,
+    role,
+    sip_extension,
+  },
+};
 }
 
 export const authApi = {
@@ -118,6 +157,30 @@ export const authApi = {
       throw new Error("Impossible de se connecter pour le moment.");
     }
   },
+  async getMe(): Promise<Partial<SessionUser>> {
+  try {
+    const { data } = await apiClient.get<any>("/auth/me");
+    const numericId = extractNumericId(data) ?? 0;
+
+    if (numericId === 0) {
+      console.warn("[getMe] numericId=0 — réponse /auth/me:", data);
+    }
+
+    const rawId = data.sub ?? data.id ?? data.userId ?? data.user_id ?? String(numericId);
+
+    return {
+      id: String(rawId),
+      numericId,
+      firstName: data.firstName ?? data.first_name ?? data.user?.firstName ?? "",
+      lastName: data.lastName ?? data.last_name ?? data.user?.lastName ?? "",
+      email: data.email ?? data.user?.email ?? "",
+      role: data.role ?? data.user?.role,
+      sip_extension: data.sip_extension ?? data.user?.sip_extension ?? null,
+    };
+  } catch {
+    return {};
+  }
+},
   async forgotPassword(email: string) {
     return { email, sent: true };
   },

@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
+import { monitoringApi } from "@/features/monitoring/api/monitoring.api";
+import { useAuthStore } from "@/features/auth/store/auth.store";
+import { useSessionStore } from "@/store/session.store";
 import {
   Activity,
   BellRing,
@@ -294,6 +297,8 @@ function AgentRealtimeRow({
 }: {
   agent: {
     id: string;
+    agentNumericId: number;
+    callId: number | null;
     code: string;
     fullName: string;
     team: string;
@@ -310,6 +315,38 @@ function AgentRealtimeRow({
 }) {
   const rowTone = getRowTone(agent.status, index);
   const statusTone = getStatusTone(agent.status);
+
+  // Extension SIP du superviseur connecte
+  const sessionData = useSessionStore((s) => s.session);
+  const authData = useAuthStore((s) => s.session);
+  const supervisorExt = sessionData?.user?.sip_extension ?? authData?.user?.sip_extension ?? "";
+
+  const isInCall = (agent.status === "in_call" || agent.status === "ringing") && !!agent.callId;
+  const callId = agent.callId;
+
+  const handleListen = useCallback(async () => {
+    if (!callId || !supervisorExt) return;
+    try { await monitoringApi.joinCall({ call_id: callId, supervisor_ext: supervisorExt, mode: "listen" }); }
+    catch (e) { console.error("[supervision] listen failed:", e); }
+  }, [callId, supervisorExt]);
+
+  const handleWhisper = useCallback(async () => {
+    if (!callId || !supervisorExt) return;
+    try { await monitoringApi.joinCall({ call_id: callId, supervisor_ext: supervisorExt, mode: "whisper" }); }
+    catch (e) { console.error("[supervision] whisper failed:", e); }
+  }, [callId, supervisorExt]);
+
+  const handleBarge = useCallback(async () => {
+    if (!callId || !supervisorExt) return;
+    try { await monitoringApi.joinCall({ call_id: callId, supervisor_ext: supervisorExt, mode: "barge" }); }
+    catch (e) { console.error("[supervision] barge failed:", e); }
+  }, [callId, supervisorExt]);
+
+  const handleLeave = useCallback(async () => {
+    if (!callId || !supervisorExt) return;
+    try { await monitoringApi.leaveCall({ call_id: callId, supervisor_ext: supervisorExt }); }
+    catch (e) { console.error("[supervision] leave failed:", e); }
+  }, [callId, supervisorExt]);
 
   return (
     <tr className={`${rowTone} border-b border-white/40 text-[#102033]`}>
@@ -340,11 +377,44 @@ function AgentRealtimeRow({
       </td>
       <td className="px-3 py-2.5">
         <div className="flex justify-end gap-1.5">
-          <ActionDot color="bg-[#2d6fcb]" icon="i" />
-          <ActionDot color="bg-[#0f8b6d]" icon="+" />
-          <ActionDot color="bg-[#f09c43]" icon="T" />
-          <ActionDot color="bg-[#6954cc]" icon="Q" />
-          <ActionDot color="bg-[#d95a78]" icon="P" />
+          {/* Info agent */}
+          <ActionDot
+            color="bg-[#2d6fcb]"
+            icon="i"
+            title={`${agent.fullName} — ${agent.status}`}
+          />
+          {/* Intrusion barge */}
+          <ActionDot
+            color="bg-[#0f8b6d]"
+            icon="+"
+            title="Intrusion (barge)"
+            disabled={!isInCall}
+            onClick={handleBarge}
+          />
+          {/* Chuchotement whisper */}
+          <ActionDot
+            color="bg-[#f09c43]"
+            icon="T"
+            title="Chuchotement (whisper)"
+            disabled={!isInCall}
+            onClick={handleWhisper}
+          />
+          {/* Ecoute silencieuse */}
+          <ActionDot
+            color="bg-[#6954cc]"
+            icon="Q"
+            title="Ecoute silencieuse (listen)"
+            disabled={!isInCall}
+            onClick={handleListen}
+          />
+          {/* Quitter supervision */}
+          <ActionDot
+            color="bg-[#d95a78]"
+            icon="P"
+            title="Quitter la supervision"
+            disabled={!isInCall}
+            onClick={handleLeave}
+          />
         </div>
       </td>
     </tr>
@@ -380,14 +450,30 @@ function TrafficBar({
 function ActionDot({
   color,
   icon,
+  title,
+  disabled = false,
+  onClick,
 }: {
   color: string;
   icon: string;
+  title?: string;
+  disabled?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <span className={`inline-flex h-6 w-6 items-center justify-center rounded-[0.45rem] text-[11px] font-bold text-white ${color}`}>
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex h-6 w-6 items-center justify-center rounded-[0.45rem] text-[11px] font-bold text-white transition-all ${
+        disabled
+          ? "cursor-not-allowed opacity-30"
+          : "cursor-pointer opacity-100 hover:scale-110 hover:opacity-90 active:scale-95"
+      } ${color}`}
+    >
       {icon}
-    </span>
+    </button>
   );
 }
 

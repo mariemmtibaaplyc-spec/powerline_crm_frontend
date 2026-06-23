@@ -127,10 +127,12 @@ export function AccountModule() {
   function handleSave() {
     const nextUser: SessionUser = {
       id: currentSession?.user.id ?? "admin_demo",
+      numericId: currentSession?.user.numericId ?? 0,
       firstName: form.firstName,
       lastName: form.lastName,
       email: form.email,
       role: form.role,
+      sip_extension: currentSession?.user.sip_extension ?? null,
     };
 
     const nextSession: AuthSession = {

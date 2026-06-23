@@ -12,6 +12,7 @@ import {
 import { useClientClock } from "@/features/workspace/hooks/use-client-clock";
 import { useAuthStore } from "@/features/auth/store/auth.store";
 import { useSessionStore } from "@/store/session.store";
+import { destroyAllSockets } from "@/lib/socket-manager";
 
 export function AgentWorkspaceTopbar() {
   const router = useRouter();
@@ -67,10 +68,12 @@ export function AgentWorkspaceTopbar() {
   function handleLogout() {
     setAuthSession(null);
     clearSession();
+    destroyAllSockets();
     document.cookie =
       "powerline_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     router.replace("/login");
   }
+
 
   return (
     <>

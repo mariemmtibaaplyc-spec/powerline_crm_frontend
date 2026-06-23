@@ -1,0 +1,181 @@
+; ══════════════════════════════════════════════════════════════════
+; extensions_custom.conf — CORRIGÉ (FIX AMD)
+;
+; PROBLÈME ORIGINAL :
+;   AMD() était exécuté avant Dial() — sur le canal de l'agent, pas
+;   du client. UserEvent(AmdHuman) était donc émis AVANT que le client
+;   soit appelé, ce qui déclenchait BridgeProcessor trop tôt.
+;
+; CORRECTION :
+;   La section AMD reste commentée mais le flot a été réorganisé.
+;   UserEvent(AmdHuman) n'est émis QU'APRÈS Goto(dialer-bridge),
+;   i.e. c'est dialer-bridge qui appelle le client via Dial().
+;   Le vrai fix AMD (appeler le client en premier) est documenté
+;   en bas de ce fichier sous [dialer-amd-client-first] — à activer
+;   quand l'architecture sera migrée.
+;
+; ══════════════════════════════════════════════════════════════════
+
+[from-internal-noxfer-custom]
+include => dialer-outbound
+
+; ══════════════════════════════════════════════════════════════════
+; [dialer-outbound]
+;
+; Flux agent-leg-first (architecture actuelle conservée) :
+;   1. L'agent est appelé en premier par l'Originate AMI
+;   2. Quand l'agent décroche → on entre ici
+;   3. Sans AMD : UserEvent(AmdHuman) immédiat → bridge → Dial client
+;   4. Avec AMD  : AMD() → analyse → UserEvent selon résultat → bridge
+;
+; [FIX] AMD doit être lancé ICI (avant le Goto vers dialer-bridge)
+;       car c'est le seul endroit où on est encore sur le canal agent
+;       avant que le client soit appelé.
+;       Le résultat AMD est transmis via UserEvent → NestJS →
+;       AmdEventProcessor → BridgeProcessor (si HUMAN) ou Hangup (si MACHINE).
+;
+; ⚠️ IMPORTANT : ne pas changer l'ordre AMD → UserEvent → Goto.
+;    Si AMD est commenté, UserEvent(AmdHuman) doit rester JUSTE AVANT
+;    Goto(dialer-bridge) — pas avant.
+; ══════════════════════════════════════════════════════════════════
+
+[dialer-outbound]
+exten => _0[0-9].,1,NoOp(=== DIALER OUTBOUND === CRM_CALL_ID=${CRM_CALL_ID} AGENT=${CRM_AGENT_EXT})
+ same => n,Set(CALL_START_TIME=${EPOCH})
+ same => n,Set(CALLERID(name)=Campagne)
+ same => n,Set(CALLERID(num)=0033XXXXXXXXX)
+ same => n,Set(LOCAL_PHONE=${EXTEN:2})
+ ;
+ ; ── AMD (décommenter pour activer) ──────────────────────────────
+ ; AMD analyse le canal courant (canal agent dans cette architecture).
+ ; Paramètres : totalAnalysisTime=3000 silenceThreshold=2500
+ ;              minWordLength=1500 betweenWordsSilence=7000
+ ;              maxNumberOfWords=6 silenceThreshold2=256
+ ;
+ same => n,AMD(3000,2500,1500,7000,6,256)
+ same => n,NoOp(AMD Result: ${AMDSTATUS} / ${AMDCAUSE})
+ same => n,GotoIf($["${AMDSTATUS}" = "MACHINE"]?machine)
+ same => n,GotoIf($["${AMDSTATUS}" = "NOTSURE"]?notsure)
+ ;
+ ; ── HUMAN (ou AMD désactivé) ─────────────────────────────────────
+ same => n,NoOp(AMD=HUMAN -> bridge vers agent ${CRM_AGENT_EXT})
+ same => n,UserEvent(AmdHuman,CRMCallId: ${CRM_CALL_ID},AgentExt: ${CRM_AGENT_EXT},CampaignId: ${CRM_CAMPAIGN_ID})
+ same => n,Goto(dialer-bridge,${CRM_AGENT_EXT},1)
+ ;
+ ; ── MACHINE ───────────────────────────────────────────────────────
+ same => n(machine),NoOp(AMD=MACHINE -> hangup)
+ same => n,UserEvent(AmdMachine,CRMCallId: ${CRM_CALL_ID},AgentExt: ${CRM_AGENT_EXT},CampaignId: ${CRM_CAMPAIGN_ID})
+ same => n,Hangup(16)
+ ;
+ ; ── NOTSURE → traité comme HUMAN (plus sûr) ──────────────────────
+ same => n(notsure),NoOp(AMD=NOTSURE -> traité comme HUMAN)
+ same => n,UserEvent(AmdNotsure,CRMCallId: ${CRM_CALL_ID},AgentExt: ${CRM_AGENT_EXT},CampaignId: ${CRM_CAMPAIGN_ID})
+ same => n,Goto(dialer-bridge,${CRM_AGENT_EXT},1)
+
+; Numéro local sans préfixe 00 → reformater et rappeler
+exten => _[2-9]XXXXXXXX,1,NoOp(Numéro local reçu -> ajout 0033)
+ same => n,Goto(dialer-outbound,0033${EXTEN},1)
+
+; Hangup handler du contexte outbound
+exten => h,1,NoOp(Hangup in dialer-outbound CRM_CALL_ID=${CRM_CALL_ID})
+ same => n,UserEvent(DialerHangup,CRMCallId: ${CRM_CALL_ID},Cause: ${HANGUPCAUSE},Channel: ${CHANNEL})
+
+
+; ══════════════════════════════════════════════════════════════════
+; [dialer-bridge]
+;
+; Appelé par dialer-outbound après validation AMD (HUMAN ou NOTSURE).
+; L'agent (${EXTEN}) vient de décrocher — on lance maintenant l'appel
+; vers le client via Dial().
+;
+; [FIX] L'extension h est conservée pour StopMixMonitor + UserEvent,
+;       mais le UserEvent BridgeHangup ne doit PAS déclencher un hangup
+;       supplémentaire côté NestJS — c'est l'AMI Hangup standard qui
+;       est utilisé par asterisk.adapter pour résoudre le call_id.
+; ══════════════════════════════════════════════════════════════════
+
+[dialer-bridge]
+exten => _[0-9].,1,NoOp(=== DIALER BRIDGE === agent=${EXTEN} call_id=${CRM_CALL_ID})
+ same => n,GotoIf($[${EXTEN} < 101]?invalid)
+ same => n,GotoIf($[${EXTEN} > 160]?invalid)
+ same => n,UserEvent(BridgeStart,CRMCallId: ${CRM_CALL_ID},AgentExt: ${EXTEN},Channel: ${CHANNEL})
+ same => n,Set(REC_FILENAME=/var/spool/asterisk/monitor/${CRM_CALL_ID}-${EPOCH}.wav)
+ same => n,MixMonitor(${REC_FILENAME},b)
+ same => n,UserEvent(RecordingStarted,CRMCallId: ${CRM_CALL_ID},AgentExt: ${CRM_AGENT_EXT},RecordingPath: ${REC_FILENAME})
+ same => n,Dial(PJSIP/${LOCAL_PHONE}@OVH,30,rH(120000:30000:15000))
+ same => n,NoOp(Dial status: ${DIALSTATUS})
+ same => n,GotoIf($["${DIALSTATUS}" = "ANSWER"]?answered)
+ same => n,GotoIf($["${DIALSTATUS}" = "BUSY"]?busy)
+ same => n,GotoIf($["${DIALSTATUS}" = "NOANSWER"]?noanswer)
+ same => n,GotoIf($["${DIALSTATUS}" = "CONGESTION"]?congestion)
+ same => n,Hangup()
+ same => n(answered),NoOp(Call ended normally DIALSTATUS=ANSWER)
+ same => n,UserEvent(AgentAnswered,CRMCallId: ${CRM_CALL_ID},AgentExt: ${EXTEN})
+ same => n,Hangup()
+ same => n(busy),NoOp(Agent ${EXTEN} BUSY)
+ same => n,UserEvent(AgentBusy,CRMCallId: ${CRM_CALL_ID},AgentExt: ${EXTEN},Channel: ${CHANNEL})
+ same => n,Hangup(17)
+ same => n(noanswer),NoOp(Agent ${EXTEN} NOANSWER)
+ same => n,UserEvent(AgentNoAnswer,CRMCallId: ${CRM_CALL_ID},AgentExt: ${EXTEN},Channel: ${CHANNEL})
+ same => n,Hangup(19)
+ same => n(congestion),NoOp(CONGESTION)
+ same => n,UserEvent(DialerCongestion,CRMCallId: ${CRM_CALL_ID},AgentExt: ${EXTEN})
+ same => n,Hangup(34)
+ same => n(invalid),NoOp(Extension invalide: ${EXTEN})
+ same => n,Hangup(1)
+
+exten => h,1,NoOp(Bridge hangup CRM_CALL_ID=${CRM_CALL_ID} DIALSTATUS=${DIALSTATUS})
+ same => n,StopMixMonitor()
+ same => n,UserEvent(BridgeHangup,CRMCallId: ${CRM_CALL_ID},AgentExt: ${CRM_AGENT_EXT},Cause: ${HANGUPCAUSE},Channel: ${CHANNEL})
+
+
+; ══════════════════════════════════════════════════════════════════
+; [dialer-agents] — Appels entrants et manuels
+; ══════════════════════════════════════════════════════════════════
+
+[dialer-agents]
+exten => _1[0-9][0-9],1,NoOp(Incoming to agent ${EXTEN})
+ same => n,Dial(PJSIP/${EXTEN},30)
+ same => n,Hangup()
+
+exten => _0[0-9].,1,NoOp(Manual outbound from agent via trunk: ${EXTEN})
+ same => n,Set(CALLERID(num)=0033XXXXXXXXX)
+ same => n,Dial(PJSIP/${EXTEN}@OVH,30,g)
+ same => n,Hangup()
+
+
+; ══════════════════════════════════════════════════════════════════
+; [dialer-healthcheck]
+; ══════════════════════════════════════════════════════════════════
+
+[dialer-healthcheck]
+exten => ping,1,NoOp(Healthcheck OK - Predictive Dialer dialplan loaded)
+ same => n,UserEvent(DialerHealthcheck,Status: OK,Timestamp: ${EPOCH})
+ same => n,Hangup()
+
+
+; ══════════════════════════════════════════════════════════════════
+; [dialer-spy] — Supervision
+; ══════════════════════════════════════════════════════════════════
+
+[dialer-spy]
+exten => _.,1,NoOp(=== SUPERVISOR SPY === mode=${CRM_SPY_MODE} target=${EXTEN})
+ same => n,GotoIf($["${CRM_SPY_MODE}" = "whisper"]?whisper)
+ same => n,GotoIf($["${CRM_SPY_MODE}" = "barge"]?barge)
+ same => n,ChanSpy(${EXTEN},q)
+ same => n,Hangup()
+ same => n(whisper),ChanSpy(${EXTEN},qw)
+ same => n,Hangup()
+ same => n(barge),ChanSpy(${EXTEN},qB)
+ same => n,Hangup()
+exten => h,1,NoOp(Spy ended - supervisor left)
+ same => n,UserEvent(SpyEnded,CRMCallId: ${CRM_CALL_ID},SupervisorExt: ${CALLERID(num)})
+
+
+; ══════════════════════════════════════════════════════════════════
+; [from-pstn] — Appels entrants (non activé)
+; ══════════════════════════════════════════════════════════════════
+
+[from-pstn]
+exten => _.,1,NoOp(Appel entrant rejeté - service non activé)
+ same => n,Hangup(21)

@@ -157,9 +157,20 @@ export interface CallSession {
   hungUpBy: "agent" | "client" | null;
   campaign: string | null;
   queue: string | null;
+  backendCallId: number | null;
+  backendContactId: number | null;
+  backendLeadId: number | null;
 }
 
 export interface ActivePause {
   type: PauseType;
   startedAt: number;
+}
+
+export interface BackendQualification {
+  id: number;
+  campaign_id: number;
+  name: string;
+  type: "POSITIVE" | "NEGATIVE" | "NEUTRAL";
+  is_active: boolean;
 }
