@@ -81,6 +81,8 @@ export function useLiveMonitoring() {
 
         return {
           id: String(agent.agent_id),
+          agentNumericId: agent.agent_id,
+          callId: agent.current_call?.call_id ?? null,
           code: buildAgentCode(agent.agent_id),
           fullName: agent.agent_name || buildAgentCode(agent.agent_id),
           team: agent.role || "Agent",

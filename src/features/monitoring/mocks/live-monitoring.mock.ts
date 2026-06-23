@@ -5,6 +5,8 @@ const now = Date.now();
 export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   {
     id: "live-agent-001",
+    agentNumericId: 1,
+    callId: null as number | null,
     code: "Agent 001",
     fullName: "Meriem Abbassi",
     team: "Outbound Energie",
@@ -16,6 +18,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-002",
+    agentNumericId: 2,
+    callId: 102 as number | null,
     code: "Agent 002",
     fullName: "Sami Ben Amor",
     team: "Qualification Residentiel",
@@ -27,6 +31,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-003",
+    agentNumericId: 3,
+    callId: null as number | null,
     code: "Agent 003",
     fullName: "Nour Gharbi",
     team: "Retention Habitat",
@@ -38,6 +44,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-004",
+    agentNumericId: 4,
+    callId: 104 as number | null,
     code: "Agent 004",
     fullName: "Walid Dridi",
     team: "Outbound Energie",
@@ -49,6 +57,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-005",
+    agentNumericId: 5,
+    callId: null as number | null,
     code: "Agent 005",
     fullName: "Leila Khadraoui",
     team: "Qualification Residentiel",
@@ -60,6 +70,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-006",
+    agentNumericId: 6,
+    callId: null as number | null,
     code: "Agent 006",
     fullName: "Imed Triki",
     team: "Retention Habitat",
@@ -71,6 +83,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-007",
+    agentNumericId: 7,
+    callId: null as number | null,
     code: "Agent 007",
     fullName: "Rim Mnasri",
     team: "Outbound Energie",
@@ -82,6 +96,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-008",
+    agentNumericId: 8,
+    callId: null as number | null,
     code: "Agent 008",
     fullName: "Karim Bouzid",
     team: "Qualification Residentiel",
@@ -93,6 +109,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-009",
+    agentNumericId: 9,
+    callId: null as number | null,
     code: "Agent 009",
     fullName: "Sarra Jlassi",
     team: "Retention Habitat",
@@ -104,6 +122,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-010",
+    agentNumericId: 10,
+    callId: 110 as number | null,
     code: "Agent 010",
     fullName: "Tarek Ghedira",
     team: "Outbound Energie",
@@ -115,6 +135,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-011",
+    agentNumericId: 11,
+    callId: 111 as number | null,
     code: "Agent 011",
     fullName: "Yasmine Trabelsi",
     team: "Qualification Residentiel",
@@ -126,6 +148,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-012",
+    agentNumericId: 12,
+    callId: null as number | null,
     code: "Agent 012",
     fullName: "Hedi Karray",
     team: "Retention Habitat",
@@ -137,6 +161,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-013",
+    agentNumericId: 13,
+    callId: null as number | null,
     code: "Agent 013",
     fullName: "Mariem Ben Salem",
     team: "Outbound Energie",
@@ -148,6 +174,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-014",
+    agentNumericId: 14,
+    callId: 114 as number | null,
     code: "Agent 014",
     fullName: "Anis Ben Hmida",
     team: "Qualification Residentiel",
@@ -159,6 +187,8 @@ export const LIVE_MONITORING_AGENTS: LiveAgent[] = [
   },
   {
     id: "live-agent-015",
+    agentNumericId: 15,
+    callId: null as number | null,
     code: "Agent 015",
     fullName: "Mouna Ayari",
     team: "Retention Habitat",

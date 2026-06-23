@@ -8,6 +8,7 @@ import {
   Delete,
   PauseCircle,
   PhoneCall,
+  PhoneIncoming,
   PhoneOff,
   Play,
   X,
@@ -20,6 +21,8 @@ import {
   useAgentWorkspaceState,
 } from "@/components/workspace/agent-workspace-provider";
 import { useClientClock } from "@/features/workspace/hooks/use-client-clock";
+import { useWorkspaceStore } from "@/features/workspace/store/workspace.store";
+import { useSipPhone } from "@/features/workspace/sip/sip-phone.provider";
 
 const actions = [
   {
@@ -65,6 +68,7 @@ export function AgentCallControlPanel() {
     startManualCall,
     statusStartedAt,
   } = useAgentWorkspaceState();
+  const { hangup: sipHangup, accept: sipAccept, hasIncomingCall } = useSipPhone();
   const [dialPadOpen, setDialPadOpen] = useState(false);
   const [manualNumber, setManualNumber] = useState("");
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
@@ -132,7 +136,7 @@ export function AgentCallControlPanel() {
   const statusElapsed =
     now === 0 ? "00:00:00" : formatAgentElapsedTime(now - statusStartedAt);
   const canOpenQualificationFromHangup =
-    agentStatus === "in_call" || agentStatus === "hung_up";
+    agentStatus === "in_call" || agentStatus === "hung_up" || agentStatus === "ringing";
   const canPauseFromCurrentState = agentStatus === "waiting";
 
   useEffect(() => {
@@ -160,12 +164,28 @@ export function AgentCallControlPanel() {
           "border-[#d8e0e8] bg-[linear-gradient(135deg,#eff3f7_0%,#e3e9f0_100%)] text-[#203246] shadow-[0_18px_36px_rgba(20,32,53,0.08)]",
         disabled: !canPauseFromCurrentState,
       };
+  // Quand l'agent a un appel entrant (manuel), remplacer "Appel manuel" par "Décrocher"
+  const manualCallAction = hasIncomingCall
+    ? {
+        label: "Décrocher",
+        hint: "Répondre à l'appel entrant",
+        icon: PhoneIncoming,
+        tone:
+          "border-[#c9f0dd] bg-[linear-gradient(135deg,#14a57e_0%,#0f8b6d_100%)] text-white shadow-[0_18px_36px_rgba(15,139,109,0.22)]",
+        disabled: false,
+      }
+    : {
+        ...actions[0],
+        disabled: !canUseManualCall,
+      };
+
   const renderedActions = [
     availabilityAction,
-    ...actions.map((action) => ({
-      ...action,
-      disabled: action.label === "Appel manuel" ? !canUseManualCall : false,
-    })),
+    manualCallAction,
+    {
+      ...actions[1],
+      disabled: !canOpenQualificationFromHangup,
+    },
   ];
 
   function appendKey(value: string) {
@@ -310,9 +330,11 @@ export function AgentCallControlPanel() {
                     disabled={action.disabled}
                     onClick={
                       isManualCall
-                        ? canUseManualCall
-                          ? handleManualCallOpen
-                          : undefined
+                        ? hasIncomingCall
+                          ? sipAccept
+                          : canUseManualCall
+                            ? handleManualCallOpen
+                            : undefined
                         : isAvailabilityAction
                           ? action.label === "Reprendre"
                             ? resumeQueue
@@ -320,13 +342,47 @@ export function AgentCallControlPanel() {
                               ? () => setAgentStatus("paused")
                               : undefined
                           : isHangupAction
-                            ? canOpenQualificationFromHangup
-                              ? () => {
-                                  markAgentHungUp();
-                                  openQualification();
-                                }
-                            : undefined
-                          : undefined
+  ? canOpenQualificationFromHangup
+    ? async () => {
+        const { callSession } = useWorkspaceStore.getState();
+        const callId = callSession.backendCallId;
+
+        // Raccrocher le canal WebRTC local
+        sipHangup();
+
+        if (agentStatus === "hung_up") {
+          // Client a déjà raccroché → juste ouvrir la qualification localement
+          openQualification();
+          return;
+        }
+
+        if (callId) {
+          try {
+            const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+            
+            if (callSession.direction === "manual") {
+              // Raccrocher le canal côté Asterisk via AMI
+              await workspaceApi.hangupCall(callId).catch((err) => {
+                console.warn("[hangup] Asterisk hangup command failed (non-blocking):", err);
+              });
+            }
+
+            await workspaceApi.endCall(callId, {});
+            // Le WS call.ended { action: "OPEN_QUALIFICATION" } ouvrira le panneau
+          } catch (err) {
+            console.error("[hangup] endCall failed:", err);
+            // Fallback : ouvrir la qualification localement quand même
+            markAgentHungUp();
+            openQualification();
+          }
+        } else {
+          // Pas de callId (appel mock/test) → comportement local
+          markAgentHungUp();
+          openQualification();
+        }
+      }
+    : undefined
+  : undefined
                     }
                     className={cn(
                       "min-h-[118px] rounded-[1.4rem] border px-5 py-5 text-left transition hover:-translate-y-0.5",

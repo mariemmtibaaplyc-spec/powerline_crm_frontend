@@ -19,6 +19,20 @@ import type {
   QualificationCode,
   Reminder,
 } from "@/types/workspace.types";
+import { useWorkspaceSocket } from "@/features/workspace/hooks/use-workspace-socket";
+import { useSessionStore } from "@/store/session.store";
+import { useEffect } from "react";
+import { useWorkspaceStore } from "@/features/workspace/store/workspace.store";
+import { useAuthStore } from "@/features/auth/store/auth.store";
+import { authApi } from "@/features/auth/api/auth.api";
+import { SipPhoneProvider, useSipPhone } from "@/features/workspace/sip/sip-phone.provider";
+
+
+function WorkspaceSocketConnector({ children }: { children: ReactNode }) {
+  const { triggerAutoAnswer } = useSipPhone();
+  useWorkspaceSocket(triggerAutoAnswer);
+  return <>{children}</>;
+}
 
 export type AgentProspect = ProspectSheet;
 export type {
@@ -50,12 +64,78 @@ export function formatAgentElapsedTime(milliseconds: number) {
     .join(":");
 }
 
-export function AgentWorkspaceProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  return <>{children}</>;
+export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
+  const session     = useSessionStore((s) => s.session);
+  const authSession = useAuthStore((s) => s.session);
+  const setSession  = useSessionStore((s) => s.setSession);
+  const setAuthSession = useAuthStore((s) => s.setSession);
+  const initFromSession = useWorkspaceStore((s) => s.initFromSession);
+
+  // Identifiant effectif : sessionStore en priorité, puis authStore (après refresh)
+  const effectiveUserId =
+    (session?.user?.numericId  ?? 0) > 0 ? session?.user?.numericId  :
+    (authSession?.user?.numericId ?? 0) > 0 ? authSession?.user?.numericId :
+    null;
+
+  // Fix refresh : authStore survit grâce à persist(localStorage),
+  // sessionStore est vide → on le resynchronise immédiatement
+  useEffect(() => {
+    if (!session && authSession) {
+      setSession(authSession);
+    }
+  }, [authSession?.user?.numericId]);
+
+  // Récupération d'urgence : si numericId=0 dans le cache localStorage
+  // (bug de session passée), on rappelle getMe() pour recalculer l'ID
+  // sans forcer l'agent à se reconnecter.
+  useEffect(() => {
+    if (effectiveUserId) return;                     // déjà OK
+    const token = authSession?.accessToken ?? session?.accessToken;
+    if (!token) return;                              // pas connecté
+
+    authApi.getMe().then((meData) => {
+      if (!meData.numericId || meData.numericId === 0) {
+        console.error("[AgentWorkspaceProvider] getMe() returned numericId=0 — vérifier /auth/me");
+        return;
+      }
+
+      const base = authSession ?? session;
+      if (!base) return;
+
+      const refreshed = {
+        ...base,
+        user: { ...base.user, ...meData },
+      };
+      setAuthSession(refreshed);
+      setSession(refreshed);
+    }).catch((err) => {
+      console.error("[AgentWorkspaceProvider] getMe() recovery failed:", err);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Une seule fois au montage
+
+  // Appelle initFromSession dès qu'on dispose d'un userId valide
+  // (que ce soit via sessionStore normal ou via authStore après refresh)
+  useEffect(() => {
+    const user = session?.user ?? authSession?.user;
+    const numericId = user?.numericId ?? 0;
+    if (numericId <= 0) return;  // guard : 0 = non résolu
+    initFromSession({
+      userId:       numericId,
+      sipExtension: user!.sip_extension ?? null,
+      firstName:    user!.firstName,
+      lastName:     user!.lastName,
+    }).catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveUserId]);
+
+  return (
+    <SipPhoneProvider>
+      <WorkspaceSocketConnector>
+        {children}
+      </WorkspaceSocketConnector>
+    </SipPhoneProvider>
+  );
 }
 
 export function useAgentWorkspaceState() {
@@ -76,6 +156,9 @@ export function useAgentWorkspaceState() {
     pauseOptions: PAUSE_OPTIONS,
     qualificationGroups: QUALIFICATION_GROUPS,
     agentIdentity: state.agentIdentity ?? MOCK_AGENT_IDENTITY,
+    backendQualifications: state.backendQualifications,
+    selectedQualificationId: state.selectedQualificationId,
+    selectBackendQualification: state.selectBackendQualification,
     pauseAgent: () => state.setAgentStatus("paused" as AgentStatus),
     resumeAgent: state.resumeQueue,
     startReminderCall: state.openReminderCall,

@@ -9,6 +9,8 @@ export type LiveAgentStatus =
 
 export interface LiveAgent {
   id: string;
+  agentNumericId: number;       // agent_id numerique pour les actions supervision
+  callId: number | null;        // call_id en cours (null si pas en appel)
   code: string;
   fullName: string;
   team: string;

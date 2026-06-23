@@ -216,16 +216,15 @@ export const DEFAULT_AGENT_PROSPECT = MOCK_PROSPECTS.meriemAbbassi;
 export function createUnknownManualCallProspect(phone: string): ProspectSheet {
   return {
     id: `prospect-unknown-${phone.replace(/[^0-9*#]+/g, "") || "manual"}`,
-    firstName: "Numero",
-    lastName: "inconnu",
+    firstName: "",
+    lastName: "",
     phone,
     phoneSecondary: "",
     email: "",
     address: "",
     postalCode: "",
     city: "",
-    comments:
-      "Aucune fiche client connue pour ce numero. Verifier l'origine de l'appel puis qualifier manuellement avant creation de fiche.",
+    comments: "",
   };
 }
 
