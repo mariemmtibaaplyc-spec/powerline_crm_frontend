@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { campaignAgentsApi } from "@/features/campaign-agents/api/campaign-agents.api";
+import type { CampaignAgentsBulkAttachSummary } from "@/features/campaign-agents/api/campaign-agents.api";
 import type { CampaignAgentRecord } from "@/types/campaign-agent.types";
 
 interface CampaignAgentsStoreState {
@@ -10,9 +11,13 @@ interface CampaignAgentsStoreState {
   campaignAgentErrorsByCampaign: Record<string, string | null>;
   mutatingCampaignAgentIds: Record<string, boolean>;
   campaignAgentActionErrorsByCampaign: Record<string, string | null>;
+  campaignAgentActionSuccessByCampaign: Record<string, string | null>;
   loadCampaignAgents: (campaignId: string, force?: boolean) => Promise<void>;
   attachCampaignAgent: (campaignId: string, agentId: string) => Promise<void>;
-  attachCampaignAgents: (campaignId: string, agentIds: string[]) => Promise<void>;
+  attachCampaignAgents: (
+    campaignId: string,
+    agentIds: string[],
+  ) => Promise<CampaignAgentsBulkAttachSummary>;
   detachCampaignAgent: (campaignId: string, agentId: string) => Promise<void>;
 }
 
@@ -22,6 +27,7 @@ export const useCampaignAgentsStore = create<CampaignAgentsStoreState>((set, get
   campaignAgentErrorsByCampaign: {},
   mutatingCampaignAgentIds: {},
   campaignAgentActionErrorsByCampaign: {},
+  campaignAgentActionSuccessByCampaign: {},
   loadCampaignAgents: async (campaignId, force = false) => {
     const existingAgents = get().agentsByCampaign[campaignId];
     const isLoading = get().loadingCampaignAgentIds[campaignId];
@@ -88,11 +94,25 @@ export const useCampaignAgentsStore = create<CampaignAgentsStoreState>((set, get
         ...state.campaignAgentActionErrorsByCampaign,
         [campaignId]: null,
       },
+      campaignAgentActionSuccessByCampaign: {
+        ...state.campaignAgentActionSuccessByCampaign,
+        [campaignId]: null,
+      },
     }));
 
     try {
       await campaignAgentsApi.attachCampaignAgent(campaignId, agentId);
       await get().loadCampaignAgents(campaignId, true);
+      set((state) => ({
+        campaignAgentActionErrorsByCampaign: {
+          ...state.campaignAgentActionErrorsByCampaign,
+          [campaignId]: null,
+        },
+        campaignAgentActionSuccessByCampaign: {
+          ...state.campaignAgentActionSuccessByCampaign,
+          [campaignId]: "1 agent affecté.",
+        },
+      }));
     } catch (error) {
       set((state) => ({
         campaignAgentActionErrorsByCampaign: {
@@ -101,6 +121,10 @@ export const useCampaignAgentsStore = create<CampaignAgentsStoreState>((set, get
             error instanceof Error
               ? error.message
               : "Impossible d affecter l agent.",
+        },
+        campaignAgentActionSuccessByCampaign: {
+          ...state.campaignAgentActionSuccessByCampaign,
+          [campaignId]: null,
         },
       }));
       throw error;
@@ -123,6 +147,10 @@ export const useCampaignAgentsStore = create<CampaignAgentsStoreState>((set, get
         ...state.campaignAgentActionErrorsByCampaign,
         [campaignId]: null,
       },
+      campaignAgentActionSuccessByCampaign: {
+        ...state.campaignAgentActionSuccessByCampaign,
+        [campaignId]: null,
+      },
     }));
 
     try {
@@ -130,33 +158,30 @@ export const useCampaignAgentsStore = create<CampaignAgentsStoreState>((set, get
         throw new Error("Aucun agent actif disponible à affecter.");
       }
 
-      const results = await Promise.allSettled(
-        agentIds.map((agentId) =>
-          campaignAgentsApi.attachCampaignAgent(campaignId, agentId),
-        ),
-      );
+      const summary = await campaignAgentsApi.attachCampaignAgentsBulk(campaignId, agentIds);
 
       await get().loadCampaignAgents(campaignId, true);
 
-      const failedResults = results.filter(
-        (result): result is PromiseRejectedResult => result.status === "rejected",
-      );
+      const successMessage =
+        `${summary.requested_agents} agents demandés, ` +
+        `${summary.assigned} nouveaux affectés, ` +
+        `${summary.already_assigned} déjà affectés.`;
 
-      if (failedResults.length > 0) {
-        const firstReason = failedResults[0]?.reason;
-        const firstMessage =
-          firstReason instanceof Error
-            ? firstReason.message
-            : "Impossible d affecter certains agents.";
+      set((state) => ({
+        campaignAgentActionErrorsByCampaign: {
+          ...state.campaignAgentActionErrorsByCampaign,
+          [campaignId]: null,
+        },
+        campaignAgentActionSuccessByCampaign: {
+          ...state.campaignAgentActionSuccessByCampaign,
+          [campaignId]:
+            summary.warnings.length > 0
+              ? `${successMessage} ${summary.warnings.join(" ")}`
+              : successMessage,
+        },
+      }));
 
-        if (failedResults.length === agentIds.length) {
-          throw new Error(firstMessage);
-        }
-
-        throw new Error(
-          `${agentIds.length - failedResults.length} agent(s) affecté(s), ${failedResults.length} en échec. ${firstMessage}`,
-        );
-      }
+      return summary;
     } catch (error) {
       set((state) => ({
         campaignAgentActionErrorsByCampaign: {
@@ -165,6 +190,10 @@ export const useCampaignAgentsStore = create<CampaignAgentsStoreState>((set, get
             error instanceof Error
               ? error.message
               : "Impossible d affecter les agents.",
+        },
+        campaignAgentActionSuccessByCampaign: {
+          ...state.campaignAgentActionSuccessByCampaign,
+          [campaignId]: null,
         },
       }));
       throw error;
@@ -187,6 +216,10 @@ export const useCampaignAgentsStore = create<CampaignAgentsStoreState>((set, get
         ...state.campaignAgentActionErrorsByCampaign,
         [campaignId]: null,
       },
+      campaignAgentActionSuccessByCampaign: {
+        ...state.campaignAgentActionSuccessByCampaign,
+        [campaignId]: null,
+      },
     }));
 
     try {
@@ -200,6 +233,10 @@ export const useCampaignAgentsStore = create<CampaignAgentsStoreState>((set, get
             error instanceof Error
               ? error.message
               : "Impossible de retirer l agent.",
+        },
+        campaignAgentActionSuccessByCampaign: {
+          ...state.campaignAgentActionSuccessByCampaign,
+          [campaignId]: null,
         },
       }));
       throw error;

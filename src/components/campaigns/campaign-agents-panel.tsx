@@ -31,6 +31,7 @@ export function CampaignAgentsPanel({ campaignId }: { campaignId: string }) {
     campaignAgentsError,
     isMutatingCampaignAgents,
     campaignAgentsActionError,
+    campaignAgentsActionSuccess,
     loadCampaignAgents,
     attachCampaignAgent,
     attachCampaignAgents,
@@ -81,17 +82,21 @@ export function CampaignAgentsPanel({ campaignId }: { campaignId: string }) {
   };
 
   const handleAttach = async () => {
-    if (selectedAgentId === ALL_ACTIVE_AGENTS_VALUE) {
-      await attachCampaignAgents(
-        campaignId,
-        availableAgents.map((agent) => agent.id),
-      );
-    } else {
-      await attachCampaignAgent(campaignId, selectedAgentId);
-    }
+    try {
+      if (selectedAgentId === ALL_ACTIVE_AGENTS_VALUE) {
+        await attachCampaignAgents(
+          campaignId,
+          availableAgents.map((agent) => agent.id),
+        );
+      } else {
+        await attachCampaignAgent(campaignId, selectedAgentId);
+      }
 
-    await loadCampaignById(campaignId, true);
-    closeAttachModal();
+      await loadCampaignById(campaignId, true);
+      closeAttachModal();
+    } catch {
+      return;
+    }
   };
 
   const handleDetach = async () => {
@@ -123,6 +128,11 @@ export function CampaignAgentsPanel({ campaignId }: { campaignId: string }) {
           {campaignAgentsActionError ? (
             <div className="mb-4 rounded-[1.25rem] border border-[#f0d8de] bg-[#fff8fa] px-4 py-3 text-sm text-[#8a5a67]">
               {campaignAgentsActionError}
+            </div>
+          ) : null}
+          {campaignAgentsActionSuccess ? (
+            <div className="mb-4 rounded-[1.25rem] border border-[#d6eadf] bg-[#f6fcf8] px-4 py-3 text-sm text-[#286847]">
+              {campaignAgentsActionSuccess}
             </div>
           ) : null}
           {campaignAgentsError ? (

@@ -22,8 +22,35 @@ type GetCampaignAgentsResponse =
       data?: BackendCampaignAgent[];
     };
 
+export type CampaignAgentsBulkAttachSummary = {
+  campaign_id: number;
+  requested_agents: number;
+  valid_agents: number;
+  already_assigned: number;
+  assigned: number;
+  skipped: number;
+  invalid_agents: number[];
+  warnings: string[];
+};
+
 function normalizeString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function toPositiveIntegerString(value: string, fieldName: string) {
+  const normalizedValue = value.trim();
+
+  if (!/^\d+$/.test(normalizedValue)) {
+    throw new Error(`${fieldName} invalide.`);
+  }
+
+  const numericValue = Number(normalizedValue);
+
+  if (!Number.isInteger(numericValue) || numericValue <= 0) {
+    throw new Error(`${fieldName} invalide.`);
+  }
+
+  return String(numericValue);
 }
 
 function getNestedRecord(value: unknown): Record<string, unknown> | undefined {
@@ -148,6 +175,29 @@ export const campaignAgentsApi = {
         getCampaignAgentApiErrorMessage(error, {
           fallbackMessage: "Impossible d affecter l agent pour le moment.",
           notFoundMessage: "Campagne ou agent introuvable.",
+        }),
+      );
+    }
+  },
+  async attachCampaignAgentsBulk(
+    campaignId: string,
+    agentIds: string[],
+  ): Promise<CampaignAgentsBulkAttachSummary> {
+    try {
+      const normalizedCampaignId = toPositiveIntegerString(campaignId, "ID campagne");
+      const { data } = await apiClient.post<CampaignAgentsBulkAttachSummary>(
+        `/campaigns/${normalizedCampaignId}/agents/bulk`,
+        {
+          agentIds: agentIds.map((agentId) => Number(agentId)),
+        },
+      );
+
+      return data;
+    } catch (error) {
+      throw new Error(
+        getCampaignAgentApiErrorMessage(error, {
+          fallbackMessage: "Impossible d affecter les agents pour le moment.",
+          notFoundMessage: "Campagne introuvable.",
         }),
       );
     }

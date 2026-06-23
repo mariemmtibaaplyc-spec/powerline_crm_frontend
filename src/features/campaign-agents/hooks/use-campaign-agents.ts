@@ -29,6 +29,9 @@ export function useCampaignAgents(campaignId?: string) {
   const campaignAgentsActionError = useCampaignAgentsStore((state) =>
     campaignId ? state.campaignAgentActionErrorsByCampaign[campaignId] ?? null : null,
   );
+  const campaignAgentsActionSuccess = useCampaignAgentsStore((state) =>
+    campaignId ? state.campaignAgentActionSuccessByCampaign[campaignId] ?? null : null,
+  );
 
   return {
     campaignAgents,
@@ -36,6 +39,7 @@ export function useCampaignAgents(campaignId?: string) {
     campaignAgentsError,
     isMutatingCampaignAgents,
     campaignAgentsActionError,
+    campaignAgentsActionSuccess,
     loadCampaignAgents,
     attachCampaignAgent,
     attachCampaignAgents,
