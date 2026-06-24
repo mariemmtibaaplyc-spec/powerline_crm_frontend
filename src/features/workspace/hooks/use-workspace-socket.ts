@@ -162,9 +162,14 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     // Appel terminé (Asterisk ou PATCH /end)
     callsSocket.on("call.ended", (data: {
       call_id:   number;
+      campaign_id?: number | null;
       action?:   string;
       duration?: number;
     }) => {
+      if (typeof data.campaign_id === "number" && data.campaign_id > 0) {
+        useWorkspaceStore.setState({ activeCampaignId: data.campaign_id });
+      }
+
       if (data.action === "OPEN_QUALIFICATION") {
         // Agent a raccroché proprement → ouvrir panneau qualification
         store.openQualification();

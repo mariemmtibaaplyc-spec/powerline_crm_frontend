@@ -1,19 +1,55 @@
 "use client";
 
+import { useEffect } from "react";
 import { ArrowRight, PauseCircle, Tags } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAgentWorkspaceState } from "@/components/workspace/agent-workspace-provider";
+import { useWorkspaceStore } from "@/features/workspace/store/workspace.store";
 
 export function AgentQualificationPanel() {
   const {
     currentStatusMeta,
     closeQualification,
     qualificationPanelOpen,
+    activeCampaignId,
 
     backendQualifications,
     selectedQualificationId,
     selectBackendQualification,
   } = useAgentWorkspaceState();
+
+  useEffect(() => {
+    if (!qualificationPanelOpen || !activeCampaignId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void import("@/features/workspace/api/workspace.api")
+      .then(({ workspaceApi }) => workspaceApi.getCampaignQualifications(activeCampaignId))
+      .then((qualifications) => {
+        if (cancelled) {
+          return;
+        }
+
+        useWorkspaceStore.setState((state) => ({
+          backendQualifications: qualifications,
+          selectedQualificationId:
+            qualifications.some((q) => q.id === state.selectedQualificationId)
+              ? state.selectedQualificationId
+              : null,
+          selectedQualificationMeta:
+            qualifications.find((q) => q.id === state.selectedQualificationId) ?? null,
+        }));
+      })
+      .catch((error) => {
+        console.error("[AgentQualificationPanel] loadCampaignQualifications failed:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [qualificationPanelOpen, activeCampaignId]);
 
   if (!qualificationPanelOpen) {
     return null;
