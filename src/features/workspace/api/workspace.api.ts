@@ -17,6 +17,7 @@ export interface CallResponse {
   status: string;
   agent_id: number;
   phone_number: string;
+  campaign_id?: number | null;
   channel_id?: string;
 }
 
@@ -78,6 +79,14 @@ function unwrap<T>(data: T | { data?: T }): T {
   return data as T;
 }
 
+function unwrapCallResponse(data: any): CallResponse {
+  const payload = unwrap<any>(data);
+  if (payload && typeof payload === "object" && payload.call && typeof payload.call === "object") {
+    return payload.call as CallResponse;
+  }
+  return payload as CallResponse;
+}
+
 // ─── API ──────────────────────────────────────────────────────────────────────
 
 export const workspaceApi = {
@@ -113,7 +122,7 @@ export const workspaceApi = {
     agent_extension?: string;
   }): Promise<CallResponse> {
     const { data } = await apiClient.post("/calls", body);
-    return unwrap(data);
+    return unwrapCallResponse(data);
   },
 
   async startClickToCall(body: {
@@ -124,7 +133,7 @@ export const workspaceApi = {
     agent_extension?: string;
   }): Promise<CallResponse> {
     const { data } = await apiClient.post("/calls/start", body);
-    return unwrap(data);
+    return unwrapCallResponse(data);
   },
 
   async endCall(callId: number, body: EndCallBody): Promise<EndCallResponse> {

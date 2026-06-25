@@ -69,6 +69,11 @@ interface AgentWorkspaceStoreState {
   userId: number | null;
   sipExtension: string | null;
   activeCampaignId: number | null;
+  currentCallId: number | null;
+  isEndingCall: boolean;
+  endingCallId: number | null;
+  isStatusMutationPending: boolean;
+  pendingAgentStatusTarget: "AVAILABLE" | "PAUSED" | "OFFLINE" | null;
   backendQualifications: BackendQualification[];
   selectedQualificationId: number | null;
   selectedQualificationMeta: BackendQualification | null;
@@ -101,6 +106,8 @@ interface AgentWorkspaceStoreState {
     sipExtension: string | null;
     firstName: string;
     lastName: string;
+    activeCampaignId?: number | null;
+    activeCampaignName?: string | null;
   }) => Promise<void>;
   setAgentStatusFromWS: (status: AgentStatus) => void;
   
@@ -126,6 +133,11 @@ function createInitialState() {
     userId: null as number | null,
     sipExtension: null as string | null,
     activeCampaignId: null as number | null,
+    currentCallId: null as number | null,
+    isEndingCall: false,
+    endingCallId: null as number | null,
+    isStatusMutationPending: false,
+    pendingAgentStatusTarget: null as "AVAILABLE" | "PAUSED" | "OFFLINE" | null,
     backendQualifications: [] as BackendQualification[],
     selectedQualificationId: null as number | null,
     selectedQualificationMeta: null as BackendQualification | null,
@@ -341,6 +353,22 @@ function applyStatusTransition(
   };
 }
 
+function createIdleCallSession(): CallSession {
+  return {
+    active: false,
+    direction: null,
+    currentNumber: null,
+    activeReminderId: null,
+    startedAt: null,
+    hungUpBy: null,
+    campaign: null,
+    queue: null,
+    backendCallId: null,
+    backendContactId: null,
+    backendLeadId: null,
+  };
+}
+
 // ── Store ────────────────────────────────────────────────────────────────────
 
 export const useWorkspaceStore = create<AgentWorkspaceStoreState>((set) => ({
@@ -362,7 +390,11 @@ export const useWorkspaceStore = create<AgentWorkspaceStoreState>((set) => ({
 
   resumeQueue: () => {
   // Appel API fire-and-forget — le WS agent.status.changed confirmera le statut
-  const { userId } = useWorkspaceStore.getState();
+  const { userId, qualificationPanelOpen, isEndingCall } = useWorkspaceStore.getState();
+  if (qualificationPanelOpen || isEndingCall) {
+    console.log("[resumeQueue] ignored because qualification transition is active");
+    return;
+  }
   if (userId) {
     import("@/features/workspace/api/workspace.api").then(({ workspaceApi }) => {
       workspaceApi.setAvailable(userId).catch((err) =>
@@ -380,7 +412,11 @@ export const useWorkspaceStore = create<AgentWorkspaceStoreState>((set) => ({
 
 startPause: (pauseCode) => {
   // Appel API fire-and-forget
-  const { userId } = useWorkspaceStore.getState();
+  const { userId, qualificationPanelOpen, isEndingCall } = useWorkspaceStore.getState();
+  if (qualificationPanelOpen || isEndingCall) {
+    console.log("[startPause] ignored because qualification transition is active");
+    return;
+  }
   if (userId) {
     import("@/features/workspace/api/workspace.api").then(({ workspaceApi }) => {
       workspaceApi.setPaused(userId).catch((err) =>
@@ -411,7 +447,11 @@ startPause: (pauseCode) => {
 },
   endPause: () => {
     // Appel API fire-and-forget — passer AVAILABLE quand on termine la pause
-    const { userId } = useWorkspaceStore.getState();
+    const { userId, qualificationPanelOpen, isEndingCall } = useWorkspaceStore.getState();
+    if (qualificationPanelOpen || isEndingCall) {
+      console.log("[endPause] ignored because qualification transition is active");
+      return;
+    }
     if (userId) {
       import("@/features/workspace/api/workspace.api").then(({ workspaceApi }) => {
         workspaceApi.setAvailable(userId).catch((err) =>
@@ -428,15 +468,32 @@ startPause: (pauseCode) => {
   },
 
   openQualification: () =>
-    set((state) => ({
-      ...state,
-      ...applyStatusTransition(state, "qualification"),
-      qualificationPanelOpen: true,
-      reminderFormOpen: false,
-      appointmentFormOpen: false,
-      selectedQualification: null,
-      pendingQualificationNextStatus: null,
-    })),
+    set((state) => {
+      if (state.qualificationPanelOpen) {
+        console.log(
+          `[openQualification] skip duplicate callId=${state.callSession.backendCallId ?? 'none'} campaignId=${state.activeCampaignId ?? 'none'} status=${state.agentStatus}`,
+        );
+        return state;
+      }
+
+      console.log(
+        `[openQualification] open callId=${state.callSession.backendCallId ?? 'none'} campaignId=${state.activeCampaignId ?? 'none'} status=${state.agentStatus}`,
+      );
+
+      return {
+        ...state,
+        ...applyStatusTransition(state, "qualification"),
+        qualificationPanelOpen: true,
+        reminderFormOpen: false,
+        appointmentFormOpen: false,
+        selectedQualification: null,
+        selectedQualificationId: null,
+        selectedQualificationMeta: null,
+        pendingQualificationNextStatus: null,
+        isEndingCall: state.callSession.backendCallId ? true : state.isEndingCall,
+        endingCallId: state.callSession.backendCallId ?? state.endingCallId,
+      };
+    }),
    selectBackendQualification: (qual: BackendQualification | null) =>
   set((state) => ({
     ...state,
@@ -452,6 +509,7 @@ startPause: (pauseCode) => {
     selectedQualificationId,
     selectedQualificationMeta,
     userId,
+    activeCampaignId,
   } = useWorkspaceStore.getState();
 
   const callId = callSession.backendCallId;
@@ -466,6 +524,9 @@ startPause: (pauseCode) => {
       selectedQualificationId: null,
       selectedQualificationMeta: null,
       pendingQualificationNextStatus: null,
+      isEndingCall: false,
+      endingCallId: null,
+      currentCallId: null,
     }));
     return;
   }
@@ -501,6 +562,9 @@ startPause: (pauseCode) => {
 
   // Qualification simple → PATCH /calls/:id/end directement
   try {
+    console.log(
+      `[closeQualification] userId=${userId ?? 'none'} callId=${callId} campaignId=${activeCampaignId ?? 'none'} qualificationId=${selectedQualificationId ?? 'none'} nextStatus=${nextStatus}`,
+    );
     await workspaceApi.endCall(callId, {
       qualification_id: selectedQualificationId ?? undefined,
     });
@@ -517,6 +581,9 @@ startPause: (pauseCode) => {
     }
   }
 
+  console.log(
+    `[ManualHangup] state cleanup after qualification callId=${callId} campaignId=${activeCampaignId ?? 'none'} nextStatus=${nextStatus}`,
+  );
   set((state) => ({
     ...state,
     ...applyStatusTransition(state, nextStatus),
@@ -525,22 +592,13 @@ startPause: (pauseCode) => {
     selectedQualificationId: null,
     selectedQualificationMeta: null,
     pendingQualificationNextStatus: null,
+    isEndingCall: false,
+    endingCallId: null,
+    currentCallId: null,
     activePause: nextStatus === "paused"
       ? { type: resolvePauseType(state.selectedPauseTypeCode), startedAt: Date.now() }
       : null,
-    callSession: {
-      active: false,
-      direction: null,
-      currentNumber: null,
-      activeReminderId: null,
-      startedAt: null,
-      hungUpBy: null,
-      campaign: null,
-      queue: null,
-      backendCallId: null,
-      backendContactId: null,
-      backendLeadId: null,
-    },
+    callSession: createIdleCallSession(),
   }));
 },
 
@@ -616,15 +674,13 @@ startPause: (pauseCode) => {
     selectedQualificationId: null,
     selectedQualificationMeta: null,
     pendingQualificationNextStatus: null,
+    isEndingCall: false,
+    endingCallId: null,
+    currentCallId: null,
     activePause: nextStatus === "paused"
       ? { type: resolvePauseType(state.selectedPauseTypeCode), startedAt: Date.now() }
       : null,
-    callSession: {
-      active: false, direction: null, currentNumber: null,
-      activeReminderId: null, startedAt: null, hungUpBy: null,
-      campaign: null, queue: null,
-      backendCallId: null, backendContactId: null, backendLeadId: null,
-    },
+    callSession: createIdleCallSession(),
   }));
 },
 
@@ -700,15 +756,13 @@ startPause: (pauseCode) => {
     selectedQualificationId: null,
     selectedQualificationMeta: null,
     pendingQualificationNextStatus: null,
+    isEndingCall: false,
+    endingCallId: null,
+    currentCallId: null,
     activePause: nextStatus === "paused"
       ? { type: resolvePauseType(state.selectedPauseTypeCode), startedAt: Date.now() }
       : null,
-    callSession: {
-      active: false, direction: null, currentNumber: null,
-      activeReminderId: null, startedAt: null, hungUpBy: null,
-      campaign: null, queue: null,
-      backendCallId: null, backendContactId: null, backendLeadId: null,
-    },
+    callSession: createIdleCallSession(),
   }));
 },
   selectQualification: (code) =>
@@ -752,6 +806,9 @@ startPause: (pauseCode) => {
   console.error("[startManualCall] userId not set — initFromSession not called?");
   return;
 }
+  console.log(
+    `[startManualCall] userId=${userId} activeCampaignId=${activeCampaignId ?? 'none'} sipExtension=${sipExtension ?? 'none'} number=${number}`,
+  );
   const startedAt = Date.now();
 
   // Mise à jour UI immédiate (optimistic)
@@ -760,7 +817,16 @@ startPause: (pauseCode) => {
     agentStatus: "ringing",
     statusStartedAt: startedAt,
     qualificationPanelOpen: false,
+    reminderFormOpen: false,
+    appointmentFormOpen: false,
+    selectedQualification: null,
+    selectedQualificationId: null,
+    selectedQualificationMeta: null,
+    pendingQualificationNextStatus: null,
     activePause: null,
+    isEndingCall: false,
+    endingCallId: null,
+    currentCallId: null,
     activeProspect: createUnknownManualCallProspect(number),
     callSession: {
       active: true,
@@ -793,11 +859,19 @@ startPause: (pauseCode) => {
   // Stocker le call_id Backend
   if (callResult.status === "fulfilled") {
     useWorkspaceStore.setState((state) => ({
+      activeCampaignId:
+        typeof callResult.value.campaign_id === "number" && callResult.value.campaign_id > 0
+          ? callResult.value.campaign_id
+          : state.activeCampaignId,
+      currentCallId: callResult.value.id,
       callSession: {
         ...state.callSession,
         backendCallId: callResult.value.id,
       },
     }));
+    console.log(
+      `[startManualCall] success userId=${userId} callId=${callResult.value.id} campaignId=${callResult.value.campaign_id ?? activeCampaignId ?? 'none'}`,
+    );
   } else {
     console.error("[startManualCall] POST /calls failed:", callResult.reason);
   }
@@ -835,6 +909,9 @@ startPause: (pauseCode) => {
         statusStartedAt: startedAt,
         qualificationPanelOpen: false,
         activePause: null,
+        isEndingCall: false,
+        endingCallId: null,
+        currentCallId: null,
         callSession: {
           active: true,
           direction: "reminder",
@@ -861,6 +938,8 @@ startPause: (pauseCode) => {
     set((state) => ({
       ...state,
       ...applyStatusTransition(state, "hung_up"),
+      isEndingCall: state.callSession.backendCallId ? true : state.isEndingCall,
+      endingCallId: state.callSession.backendCallId ?? state.endingCallId,
       callSession: {
         ...state.callSession,
         active: false,
@@ -872,6 +951,8 @@ startPause: (pauseCode) => {
     set((state) => ({
       ...state,
       ...applyStatusTransition(state, "hung_up"),
+      isEndingCall: state.callSession.backendCallId ? true : state.isEndingCall,
+      endingCallId: state.callSession.backendCallId ?? state.endingCallId,
       callSession: {
         ...state.callSession,
         active: false,
@@ -882,11 +963,37 @@ startPause: (pauseCode) => {
   // ── Actions AJOUT Backend ──────────────────────────────────────────────────
 
   initFromSession: async (params) => {
+    const currentState = useWorkspaceStore.getState();
+    if (currentState.qualificationPanelOpen || currentState.isEndingCall) {
+      console.log(
+        `[initFromSession] skip setPaused during qualification callId=${currentState.callSession.backendCallId ?? 'none'} campaignId=${currentState.activeCampaignId ?? 'none'}`,
+      );
+      set((state) => ({
+        ...state,
+        userId: params.userId,
+        sipExtension: params.sipExtension,
+        activeCampaignId: state.activeCampaignId ?? params.activeCampaignId ?? null,
+        agentIdentity: {
+          ...state.agentIdentity,
+          fullName: `${params.firstName} ${params.lastName}`.trim(),
+          firstName: params.firstName,
+          lastName: params.lastName,
+          campaign: params.activeCampaignName ?? state.agentIdentity.campaign,
+        },
+      }));
+      return;
+    }
+
+    console.log(
+      `[initFromSession] userId=${params.userId} activeCampaignId=${params.activeCampaignId ?? 'none'} sipExtension=${params.sipExtension ?? 'none'}`,
+    );
+
     // 1. Mettre à jour l'identité et forcer le statut local en PAUSED immédiatement
     set((state) => ({
       ...state,
       userId:       params.userId,
       sipExtension: params.sipExtension,
+      activeCampaignId: state.activeCampaignId ?? params.activeCampaignId ?? null,
       agentStatus:  "paused" as AgentStatus,
       statusStartedAt: Date.now(),
       agentIdentity: {
@@ -894,6 +1001,7 @@ startPause: (pauseCode) => {
         fullName:  `${params.firstName} ${params.lastName}`.trim(),
         firstName: params.firstName,
         lastName:  params.lastName,
+        campaign: params.activeCampaignName ?? state.agentIdentity.campaign,
       },
     }));
 
@@ -913,6 +1021,15 @@ startPause: (pauseCode) => {
   set((state) => {
     // Ignorer AVAILABLE/waiting si l'agent a explicitement choisi la pause
     if (status === "waiting" && state.agentStatus === "paused") return state;
+    if (
+      state.qualificationPanelOpen &&
+      (status === "waiting" || status === "paused")
+    ) {
+      console.log(
+        `[setAgentStatusFromWS] ignored status=${status} because qualificationPanelOpen=true callId=${state.callSession.backendCallId ?? 'none'}`,
+      );
+      return state;
+    }
     return {
       ...state,
       agentStatus: status,

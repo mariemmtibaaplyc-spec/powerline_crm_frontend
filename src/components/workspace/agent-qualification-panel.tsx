@@ -20,10 +20,18 @@ export function AgentQualificationPanel() {
 
   useEffect(() => {
     if (!qualificationPanelOpen || !activeCampaignId) {
+      if (qualificationPanelOpen) {
+        console.warn(
+          `[AgentQualificationPanel] skip load qualificationPanelOpen=${qualificationPanelOpen} activeCampaignId=${activeCampaignId ?? 'none'}`,
+        );
+      }
       return;
     }
 
     let cancelled = false;
+    console.log(
+      `[AgentQualificationPanel] load qualifications campaignId=${activeCampaignId}`,
+    );
 
     void import("@/features/workspace/api/workspace.api")
       .then(({ workspaceApi }) => workspaceApi.getCampaignQualifications(activeCampaignId))
@@ -31,6 +39,10 @@ export function AgentQualificationPanel() {
         if (cancelled) {
           return;
         }
+
+        console.log(
+          `[AgentQualificationPanel] loaded qualifications campaignId=${activeCampaignId} count=${qualifications.length}`,
+        );
 
         useWorkspaceStore.setState((state) => ({
           backendQualifications: qualifications,

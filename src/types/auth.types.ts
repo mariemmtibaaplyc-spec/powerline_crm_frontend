@@ -8,6 +8,8 @@ export interface SessionUser {
   email: string;
   role: UserRole;
   sip_extension: string | null;
+  activeCampaignId?: number | null;
+  activeCampaignName?: string | null;
 }
 
 export interface AuthSession {

@@ -13,6 +13,8 @@ import {
 import { usePathname } from "next/navigation";
 import { RolePreviewSwitcher } from "@/components/layout/role-preview-switcher";
 import { AgentWorkspaceTopbar } from "@/components/workspace/agent-workspace-topbar";
+import { useAuthStore } from "@/features/auth/store/auth.store";
+import { useSessionStore } from "@/store/session.store";
 
 const workspaces = [
   {
@@ -51,10 +53,22 @@ const workspaces = [
 
 export function Topbar() {
   const pathname = usePathname();
+  const session = useSessionStore((state) => state.session);
+  const authSession = useAuthStore((state) => state.session);
   const isAgent = pathname.startsWith("/agent");
   const workspace =
     workspaces.find((item) => pathname.startsWith(item.match)) ?? workspaces[0];
   const WorkspaceIcon = workspace.icon;
+  const sessionUser = session?.user ?? authSession?.user ?? null;
+  const effectiveWorkspace =
+    isAgent && sessionUser
+      ? {
+          ...workspace,
+          user:
+            `${sessionUser.firstName ?? ""} ${sessionUser.lastName ?? ""}`.trim() ||
+            "Agent connecte",
+        }
+      : workspace;
 
   if (isAgent) {
     return <AgentWorkspaceTopbar />;
@@ -71,18 +85,18 @@ export function Topbar() {
             <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.24em] text-white/42">
               Powerline Workspace
             </p>
-            <h2 className="mt-1 truncate text-xl font-semibold">{workspace.label}</h2>
+            <h2 className="mt-1 truncate text-xl font-semibold">{effectiveWorkspace.label}</h2>
           </div>
           <div className="hidden rounded-full border border-white/10 bg-white/6 px-3 py-2 text-sm text-white/58 xl:flex xl:items-center xl:gap-2">
             <Clock3 className="h-4 w-4" />
-            {workspace.note}
+            {effectiveWorkspace.note}
           </div>
         </div>
 
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
           <div className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/6 px-4 py-3 text-sm text-white/45 2xl:flex 2xl:min-w-[340px] 3xl:min-w-[420px]">
             <Search className="h-4 w-4" />
-            {workspace.search}
+            {effectiveWorkspace.search}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <RolePreviewSwitcher tone="dark" compact />
@@ -100,7 +114,7 @@ export function Topbar() {
               <Bell className="h-4 w-4" />
             </button>
             <div className="inline-flex h-11 items-center rounded-full bg-white px-4 text-sm font-medium text-[#0d1b2a]">
-              {workspace.user}
+              {effectiveWorkspace.user}
             </div>
           </div>
         </div>

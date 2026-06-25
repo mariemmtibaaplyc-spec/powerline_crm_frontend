@@ -99,6 +99,9 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
           agentStatus:      nextStatus,
           statusStartedAt:  state.agentStatus === nextStatus ? state.statusStartedAt : startedAt,
           activeCampaignId: data.campaign?.id ?? state.activeCampaignId,
+          currentCallId:    data.call_id,
+          isEndingCall:     false,
+          endingCallId:     null,
           callSession: {
             active:           true,
             direction:        state.callSession.direction ?? null,
@@ -142,6 +145,9 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       useWorkspaceStore.setState((state) => ({
         agentStatus:     "ringing",
         statusStartedAt: Date.now(),
+        currentCallId:   data.call_id,
+        isEndingCall:    false,
+        endingCallId:    null,
         callSession: {
           ...state.callSession,
           backendCallId: data.call_id,
@@ -162,22 +168,50 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     // Appel terminé (Asterisk ou PATCH /end)
     callsSocket.on("call.ended", (data: {
       call_id:   number;
+      agent_id?: number;
       campaign_id?: number | null;
       action?:   string;
       duration?: number;
+      qualification_id?: number | null;
+      source?: string;
+      status?: string;
     }) => {
+      const currentState = useWorkspaceStore.getState();
+      const currentCallId = currentState.callSession.backendCallId;
+      const trackedCallId = currentState.currentCallId;
+      const isCurrentCall =
+        currentCallId === data.call_id || trackedCallId === data.call_id;
+      const isManualCall = currentState.callSession.direction === "manual";
+
+      console.log(
+        `[call.ended] userId=${userId} agentId=${data.agent_id ?? userId} callId=${data.call_id} currentCallId=${currentCallId ?? 'none'} trackedCallId=${trackedCallId ?? 'none'} campaignId=${data.campaign_id ?? 'none'} qualificationId=${data.qualification_id ?? 'none'} action=${data.action ?? 'none'} source=${data.source ?? 'none'} eventStatus=${data.status ?? 'none'} direction=${currentState.callSession.direction ?? 'none'} status=${currentState.agentStatus}`,
+      );
+
+      if (!isCurrentCall) {
+        console.log(
+          `[call.ended] ignore stale event callId=${data.call_id} currentCallId=${currentCallId ?? 'none'}`,
+        );
+        return;
+      }
+
       if (typeof data.campaign_id === "number" && data.campaign_id > 0) {
         useWorkspaceStore.setState({ activeCampaignId: data.campaign_id });
       }
 
-      if (data.action === "OPEN_QUALIFICATION") {
-        // Agent a raccroché proprement → ouvrir panneau qualification
+      if (data.action === "OPEN_QUALIFICATION" || isManualCall) {
+        // Pour les appels manuels, on ouvre toujours la qualification
+        // dès la fin du call courant, même si le backend le termine en FAILED.
         store.openQualification();
+        console.log(
+          `[ManualHangup] qualification opened source=ws callId=${data.call_id} campaignId=${data.campaign_id ?? currentState.activeCampaignId ?? 'none'}`,
+        );
       } else {
         // Client a raccroché en premier → état hung_up, PAS de qualification
         useWorkspaceStore.setState((state) => ({
           agentStatus:     "hung_up",
           statusStartedAt: Date.now(),
+          isEndingCall:    state.callSession.backendCallId ? true : state.isEndingCall,
+          endingCallId:    state.callSession.backendCallId ?? state.endingCallId,
           callSession: {
             ...state.callSession,
             active:   false,
@@ -213,10 +247,7 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
         return;
       }
 
-      useWorkspaceStore.setState({
-        agentStatus:     mapBackendStatus(data.status),
-        statusStartedAt: Date.now(),
-      });
+      useWorkspaceStore.getState().setAgentStatusFromWS(mapBackendStatus(data.status));
     });
 
     agentsSocket.connect();

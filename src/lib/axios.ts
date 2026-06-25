@@ -1,4 +1,6 @@
 import axios from "axios";
+import { useAuthStore } from "@/features/auth/store/auth.store";
+import { useSessionStore } from "@/store/session.store";
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000/api/v1",
@@ -10,10 +12,17 @@ export const apiClient = axios.create({
 
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("accessToken");
+    const sessionToken = useSessionStore.getState().session?.accessToken ?? null;
+    const authToken = useAuthStore.getState().session?.accessToken ?? null;
+    const storageToken = localStorage.getItem("accessToken");
+    const token = sessionToken ?? authToken ?? storageToken;
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+
+      if (storageToken !== token) {
+        localStorage.setItem("accessToken", token);
+      }
     } else if (config.headers.Authorization) {
       delete config.headers.Authorization;
     }
@@ -26,6 +35,8 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (typeof window !== "undefined" && axios.isAxiosError(error) && error.response?.status === 401) {
+      useSessionStore.getState().clearSession();
+      useAuthStore.getState().setSession(null);
       window.localStorage.removeItem("accessToken");
       window.localStorage.removeItem("refreshToken");
       document.cookie =

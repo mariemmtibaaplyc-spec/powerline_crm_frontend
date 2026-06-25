@@ -60,6 +60,7 @@ export function AgentCallControlPanel() {
   const {
     agentStatus,
     currentStatusMeta,
+    isEndingCall,
     isPaused,
     markAgentHungUp,
     openQualification,
@@ -136,7 +137,8 @@ export function AgentCallControlPanel() {
   const statusElapsed =
     now === 0 ? "00:00:00" : formatAgentElapsedTime(now - statusStartedAt);
   const canOpenQualificationFromHangup =
-    agentStatus === "in_call" || agentStatus === "hung_up" || agentStatus === "ringing";
+    !isEndingCall &&
+    (agentStatus === "in_call" || agentStatus === "hung_up" || agentStatus === "ringing");
   const canPauseFromCurrentState = agentStatus === "waiting";
 
   useEffect(() => {
@@ -184,7 +186,7 @@ export function AgentCallControlPanel() {
     manualCallAction,
     {
       ...actions[1],
-      disabled: !canOpenQualificationFromHangup,
+      disabled: !canOpenQualificationFromHangup || isEndingCall,
     },
   ];
 
@@ -344,15 +346,47 @@ export function AgentCallControlPanel() {
                           : isHangupAction
   ? canOpenQualificationFromHangup
     ? async () => {
-        const { callSession } = useWorkspaceStore.getState();
+        const {
+          callSession,
+          agentStatus: liveAgentStatus,
+          activeCampaignId,
+          qualificationPanelOpen,
+          isEndingCall: liveIsEndingCall,
+          endingCallId,
+        } = useWorkspaceStore.getState();
         const callId = callSession.backendCallId;
+
+        if (liveIsEndingCall && endingCallId === callId) {
+          console.log(
+            `[ManualHangup] click ignored if already ending callId=${callId ?? 'none'} campaignId=${activeCampaignId ?? 'none'} status=${liveAgentStatus}`,
+          );
+          return;
+        }
+
+        if (callId) {
+          useWorkspaceStore.setState({
+            isEndingCall: true,
+            endingCallId: callId,
+            currentCallId: callId,
+          });
+        }
 
         // Raccrocher le canal WebRTC local
         sipHangup();
 
-        if (agentStatus === "hung_up") {
-          // Client a déjà raccroché → juste ouvrir la qualification localement
+        console.log(
+          `[ManualHangup] end start callId=${callId ?? 'none'} campaignId=${activeCampaignId ?? 'none'} status=${liveAgentStatus} direction=${callSession.direction ?? 'none'} qualificationPanelOpen=${qualificationPanelOpen}`,
+        );
+
+        if (
+          liveAgentStatus === "hung_up" ||
+          (callSession.direction === "manual" && callSession.active === false && callId)
+        ) {
+          // Le call est déjà terminé côté backend/UI → ouvrir la qualification localement
           openQualification();
+          console.log(
+            `[ManualHangup] qualification opened source=local callId=${callId ?? 'none'} campaignId=${activeCampaignId ?? 'none'}`,
+          );
           return;
         }
 
@@ -368,17 +402,27 @@ export function AgentCallControlPanel() {
             }
 
             await workspaceApi.endCall(callId, {});
-            // Le WS call.ended { action: "OPEN_QUALIFICATION" } ouvrira le panneau
+            if (callSession.direction === "manual") {
+              openQualification();
+              console.log(
+                `[ManualHangup] qualification opened source=http callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
+              );
+            }
           } catch (err) {
             console.error("[hangup] endCall failed:", err);
             // Fallback : ouvrir la qualification localement quand même
             markAgentHungUp();
             openQualification();
+            console.log(
+              `[ManualHangup] qualification opened source=http_fallback callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
+            );
           }
         } else {
-          // Pas de callId (appel mock/test) → comportement local
+          console.warn(
+            `[ManualHangup] skip qualification because no backend call exists callId=none campaignId=${activeCampaignId ?? 'none'} status=${liveAgentStatus}`,
+          );
+          // Pas de callId backend → ne pas ouvrir de qualification
           markAgentHungUp();
-          openQualification();
         }
       }
     : undefined

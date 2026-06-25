@@ -23,8 +23,10 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAuthStore } from "@/features/auth/store/auth.store";
 import { useWorkspaceStore } from "@/features/workspace/store/workspace.store";
 import { cn } from "@/lib/utils";
+import { useSessionStore } from "@/store/session.store";
 
 interface NavChildItem {
   label: string;
@@ -189,7 +191,20 @@ function hasActiveChild(pathname: string, children?: NavChildItem[]) {
   return children.some((child) => isActive(pathname, child.href));
 }
 
-function getWorkspaceMeta(pathname: string): WorkspaceMeta {
+function getWorkspaceMeta(
+  pathname: string,
+  sessionUser?: {
+    firstName?: string;
+    lastName?: string;
+    sip_extension?: string | null;
+  } | null,
+): WorkspaceMeta {
+  const fullName =
+    `${sessionUser?.firstName ?? ""} ${sessionUser?.lastName ?? ""}`.trim() || "Agent connecte";
+  const extensionLabel = sessionUser?.sip_extension
+    ? `Ext ${sessionUser.sip_extension}`
+    : "Extension SIP non configuree";
+
   if (pathname.startsWith("/admin")) {
     return {
       title: "Admin Control",
@@ -217,9 +232,9 @@ function getWorkspaceMeta(pathname: string): WorkspaceMeta {
   if (pathname.startsWith("/agent")) {
     return {
       title: "Agent Desk",
-      user: "agent 014",
+      user: fullName,
       role: "Production appels",
-      status: "En pause",
+      status: extensionLabel,
       note: "Espace de traitement prospect et suivi des rappels.",
       icon: Headphones,
       statusTone: "bg-[#f0b57d]/12 text-[#ffd8b5]",
@@ -239,6 +254,8 @@ function getWorkspaceMeta(pathname: string): WorkspaceMeta {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const session = useSessionStore((state) => state.session);
+  const authSession = useAuthStore((state) => state.session);
   const appointments = useWorkspaceStore((state) => state.appointments);
   const historyEntries = useWorkspaceStore((state) => state.historyEntries);
   const isAdmin = pathname.startsWith("/admin");
@@ -251,7 +268,8 @@ export function Sidebar() {
       : isAgent
       ? agentSections
       : genericSections;
-  const workspace = getWorkspaceMeta(pathname);
+  const sessionUser = session?.user ?? authSession?.user ?? null;
+  const workspace = getWorkspaceMeta(pathname, sessionUser);
   const WorkspaceIcon = workspace.icon;
   const [openChildren, setOpenChildren] = useState<Record<string, boolean>>({});
 

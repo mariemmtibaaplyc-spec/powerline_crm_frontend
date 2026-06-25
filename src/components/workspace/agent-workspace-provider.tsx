@@ -21,7 +21,7 @@ import type {
 } from "@/types/workspace.types";
 import { useWorkspaceSocket } from "@/features/workspace/hooks/use-workspace-socket";
 import { useSessionStore } from "@/store/session.store";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/features/workspace/store/workspace.store";
 import { useAuthStore } from "@/features/auth/store/auth.store";
 import { authApi } from "@/features/auth/api/auth.api";
@@ -70,6 +70,7 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
   const setSession  = useSessionStore((s) => s.setSession);
   const setAuthSession = useAuthStore((s) => s.setSession);
   const initFromSession = useWorkspaceStore((s) => s.initFromSession);
+  const initializedUserIdRef = useRef<number | null>(null);
 
   // Identifiant effectif : sessionStore en priorité, puis authStore (après refresh)
   const effectiveUserId =
@@ -120,11 +121,15 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
     const user = session?.user ?? authSession?.user;
     const numericId = user?.numericId ?? 0;
     if (numericId <= 0) return;  // guard : 0 = non résolu
+    if (initializedUserIdRef.current === numericId) return;
+    initializedUserIdRef.current = numericId;
     initFromSession({
       userId:       numericId,
       sipExtension: user!.sip_extension ?? null,
       firstName:    user!.firstName,
       lastName:     user!.lastName,
+      activeCampaignId: user?.activeCampaignId ?? null,
+      activeCampaignName: user?.activeCampaignName ?? null,
     }).catch(console.error);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveUserId]);

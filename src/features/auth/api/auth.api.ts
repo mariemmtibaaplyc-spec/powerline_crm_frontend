@@ -35,6 +35,14 @@ type BackendLoginResponse = {
     fullName?: string;
     name?: string;
     role?: string;
+    first_name?: string;
+    last_name?: string;
+    active_campaign_id?: number | null;
+    active_campaign_name?: string | null;
+    current_campaign?: {
+      id?: number;
+      name?: string;
+    } | null;
   };
   id?: string | number;
   firstName?: string;
@@ -44,6 +52,14 @@ type BackendLoginResponse = {
   fullName?: string;
   name?: string;
   role?: string;
+  first_name?: string;
+  last_name?: string;
+  active_campaign_id?: number | null;
+  active_campaign_name?: string | null;
+  current_campaign?: {
+    id?: number;
+    name?: string;
+  } | null;
 };
 
 function normalizeRole(role: unknown): UserRole {
@@ -107,6 +123,18 @@ function mapBackendSession(
   const rawId = (user as any).id ?? (response as any).id ?? String(numericId || email);
   const sip_extension =
     (user as any).sip_extension ?? (response as any).sip_extension ?? null;
+  const activeCampaignId =
+    (user as any).active_campaign_id ??
+    (response as any).active_campaign_id ??
+    (user as any).current_campaign?.id ??
+    (response as any).current_campaign?.id ??
+    null;
+  const activeCampaignName =
+    (user as any).active_campaign_name ??
+    (response as any).active_campaign_name ??
+    (user as any).current_campaign?.name ??
+    (response as any).current_campaign?.name ??
+    null;
 
 return {
   accessToken,
@@ -114,11 +142,15 @@ return {
   user: {
     id: String(rawId),
     numericId,
-    firstName: user.firstName ?? response.firstName ?? namesFromFullName.firstName,
-    lastName: user.lastName ?? response.lastName ?? namesFromFullName.lastName,
+    firstName:
+      user.firstName ?? user.first_name ?? response.firstName ?? response.first_name ?? namesFromFullName.firstName,
+    lastName:
+      user.lastName ?? user.last_name ?? response.lastName ?? response.last_name ?? namesFromFullName.lastName,
     email,
     role,
     sip_extension,
+    activeCampaignId,
+    activeCampaignName,
   },
 };
 }
@@ -171,11 +203,23 @@ export const authApi = {
     return {
       id: String(rawId),
       numericId,
-      firstName: data.firstName ?? data.first_name ?? data.user?.firstName ?? "",
-      lastName: data.lastName ?? data.last_name ?? data.user?.lastName ?? "",
+      firstName: data.firstName ?? data.first_name ?? data.user?.firstName ?? data.user?.first_name ?? "",
+      lastName: data.lastName ?? data.last_name ?? data.user?.lastName ?? data.user?.last_name ?? "",
       email: data.email ?? data.user?.email ?? "",
       role: data.role ?? data.user?.role,
       sip_extension: data.sip_extension ?? data.user?.sip_extension ?? null,
+      activeCampaignId:
+        data.active_campaign_id ??
+        data.user?.active_campaign_id ??
+        data.current_campaign?.id ??
+        data.user?.current_campaign?.id ??
+        null,
+      activeCampaignName:
+        data.active_campaign_name ??
+        data.user?.active_campaign_name ??
+        data.current_campaign?.name ??
+        data.user?.current_campaign?.name ??
+        null,
     };
   } catch {
     return {};
