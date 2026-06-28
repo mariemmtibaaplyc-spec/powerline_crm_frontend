@@ -128,6 +128,7 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
       sipExtension: user!.sip_extension ?? null,
       firstName:    user!.firstName,
       lastName:     user!.lastName,
+      role:         user!.role ?? null,
       activeCampaignId: user?.activeCampaignId ?? null,
       activeCampaignName: user?.activeCampaignName ?? null,
     }).catch(console.error);

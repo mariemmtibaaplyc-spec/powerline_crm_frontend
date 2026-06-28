@@ -8,11 +8,7 @@ import {
   formatInputDate,
   prospectFullName,
 } from "@/features/workspace/mocks/mock.utils";
-import {
-  createUnknownManualCallProspect,
-  DEFAULT_AGENT_PROSPECT,
-  findMockProspectByPhone,
-} from "@/features/workspace/mocks/prospects.mock";
+import { createUnknownManualCallProspect } from "@/features/workspace/mocks/prospects.mock";
 import { findQualificationOption } from "@/features/workspace/mocks/qualifications.mock";
 import { createMockReminders } from "@/features/workspace/mocks/reminders.mock";
 import type {
@@ -106,6 +102,7 @@ interface AgentWorkspaceStoreState {
     sipExtension: string | null;
     firstName: string;
     lastName: string;
+    role?: string | null;
     activeCampaignId?: number | null;
     activeCampaignName?: string | null;
   }) => Promise<void>;
@@ -128,7 +125,7 @@ function createInitialState() {
     agentStatus: "paused" as AgentStatus,
     statusStartedAt: now,
     sessionStartedAt: now,
-    activeProspect: DEFAULT_AGENT_PROSPECT,
+    activeProspect: createUnknownManualCallProspect(""),
     // ── AJOUT Backend ───────────────────────────────────────────────────────
     userId: null as number | null,
     sipExtension: null as string | null,
@@ -979,6 +976,7 @@ startPause: (pauseCode) => {
           firstName: params.firstName,
           lastName: params.lastName,
           campaign: params.activeCampaignName ?? state.agentIdentity.campaign,
+          ...(params.role ? { role: params.role } : {}),
         },
       }));
       return;
@@ -1002,6 +1000,7 @@ startPause: (pauseCode) => {
         firstName: params.firstName,
         lastName:  params.lastName,
         campaign: params.activeCampaignName ?? state.agentIdentity.campaign,
+        ...(params.role ? { role: params.role } : {}),
       },
     }));
 
