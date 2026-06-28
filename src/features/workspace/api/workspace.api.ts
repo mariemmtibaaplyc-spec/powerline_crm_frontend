@@ -171,6 +171,20 @@ export const workspaceApi = {
     return Array.isArray(payload) ? payload : (payload?.items ?? payload?.data ?? []);
   },
 
+  // ── Daily session stats (footer) ─────────────────────────────────────────────
+
+  async getDailyStats(userId: number): Promise<{
+    date:                  string;
+    communication_seconds: number;
+    qualification_seconds: number;
+    attente_seconds:       number;
+    pause_seconds:         number;
+    total_seconds:         number;
+  }> {
+    const { data } = await apiClient.get(`/agent-statuses/${userId}/daily-stats`);
+    return unwrap<any>(data);
+  },
+
   // ── Qualifications ───────────────────────────────────────────────────────────
 
   async getCampaignQualifications(campaignId: number): Promise<BackendQualification[]> {

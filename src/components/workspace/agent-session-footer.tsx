@@ -9,29 +9,7 @@ import {
 import { useClientClock } from "@/features/workspace/hooks/use-client-clock";
 import { cn } from "@/lib/utils";
 
-const footerSnapshots = [
-  {
-    communication: "00:00:00",
-    qualification: "00:48:47",
-    attente: "00:00:00",
-    pause: "00:46:13",
-    totalSession: "02:05:29",
-  },
-  {
-    communication: "00:00:00",
-    qualification: "00:53:12",
-    attente: "00:02:14",
-    pause: "00:51:03",
-    totalSession: "02:10:29",
-  },
-  {
-    communication: "00:00:00",
-    qualification: "00:58:41",
-    attente: "00:01:09",
-    pause: "00:56:04",
-    totalSession: "02:15:29",
-  },
-] as const;
+const POLL_INTERVAL_MS = 300_000; // 5 minutes
 
 function formatFooterSyncTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString("fr-FR", {
@@ -40,47 +18,84 @@ function formatFooterSyncTime(timestamp: number) {
   });
 }
 
+function secondsToHms(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return [h, m, sec].map((p) => String(p).padStart(2, "0")).join(":");
+}
+
+interface DailyStats {
+  communication_seconds: number;
+  qualification_seconds: number;
+  attente_seconds:       number;
+  pause_seconds:         number;
+  total_seconds:         number;
+}
+
 export function AgentSessionFooter() {
   const {
     agentStatus,
     appointments,
     currentStatusMeta,
     isPaused,
-    sessionStartedAt,
     statusStartedAt,
+    userId,
   } = useAgentWorkspaceState();
-  const [snapshotIndex, setSnapshotIndex] = useState(0);
+
   const now = useClientClock();
-  const [lastSyncAt, setLastSyncAt] = useState("--:--");
 
+  const [dailyStats, setDailyStats]   = useState<DailyStats | null>(null);
+  const [lastSyncAt, setLastSyncAt]   = useState("--:--");
+  const [syncError, setSyncError]     = useState(false);
+
+  // Charger les stats depuis le backend et renouveler toutes les 5 minutes
   useEffect(() => {
-    setLastSyncAt(formatFooterSyncTime(Date.now()));
+    if (!userId) return;
 
-    const interval = window.setInterval(() => {
-      setSnapshotIndex((current) => (current + 1) % footerSnapshots.length);
-      setLastSyncAt(formatFooterSyncTime(Date.now()));
-    }, 300000);
+    const fetchStats = async () => {
+      try {
+        const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+        const stats = await workspaceApi.getDailyStats(userId);
+        setDailyStats(stats);
+        setLastSyncAt(formatFooterSyncTime(Date.now()));
+        setSyncError(false);
+      } catch {
+        setSyncError(true);
+      }
+    };
 
+    fetchStats();
+    const interval = window.setInterval(fetchStats, POLL_INTERVAL_MS);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [userId]);
 
-  const snapshot = footerSnapshots[snapshotIndex];
   const totalAppointments = appointments.length;
-  const sessionElapsed =
-    now === 0 ? "00:00:00" : formatAgentElapsedTime(now - sessionStartedAt);
+
+  // Chrono "statut actif en cours" — rafraîchi chaque seconde par useClientClock
   const stateElapsed =
     now === 0 ? "00:00:00" : formatAgentElapsedTime(now - statusStartedAt);
+
+  // Durées cumulées depuis le backend, avec fallback "00:00:00" avant le premier poll
+  const cumComm  = dailyStats ? secondsToHms(dailyStats.communication_seconds) : "00:00:00";
+  const cumQual  = dailyStats ? secondsToHms(dailyStats.qualification_seconds) : "00:00:00";
+  const cumAtt   = dailyStats ? secondsToHms(dailyStats.attente_seconds)       : "00:00:00";
+  const cumPause = dailyStats ? secondsToHms(dailyStats.pause_seconds)         : "00:00:00";
+  const cumTotal = dailyStats ? secondsToHms(dailyStats.total_seconds)         : "00:00:00";
 
   const footerItems = useMemo(
     () => [
       {
         label: "Communication",
+        // Si l'agent est en cours d'appel, affiche le chrono live pour la période active ;
+        // le backend sera mis à jour lors du prochain poll (ended_at=NULL → COALESCE NOW())
         value:
           agentStatus === "in_call" ||
           agentStatus === "ringing" ||
           agentStatus === "hung_up"
             ? stateElapsed
-            : snapshot.communication,
+            : cumComm,
         badge:
           agentStatus === "in_call"
             ? "Active"
@@ -105,8 +120,7 @@ export function AgentSessionFooter() {
       },
       {
         label: "Qualification",
-        value:
-          agentStatus === "qualification" ? stateElapsed : snapshot.qualification,
+        value: agentStatus === "qualification" ? stateElapsed : cumQual,
         badge: agentStatus === "qualification" ? "Active" : "Suivi fiche",
         tone:
           agentStatus === "qualification"
@@ -116,7 +130,7 @@ export function AgentSessionFooter() {
       },
       {
         label: "Attente",
-        value: agentStatus === "waiting" ? stateElapsed : snapshot.attente,
+        value: agentStatus === "waiting" ? stateElapsed : cumAtt,
         badge: agentStatus === "waiting" ? "Active" : "File",
         tone:
           agentStatus === "waiting"
@@ -126,7 +140,7 @@ export function AgentSessionFooter() {
       },
       {
         label: "Pause",
-        value: isPaused ? stateElapsed : snapshot.pause,
+        value: isPaused ? stateElapsed : cumPause,
         badge: isPaused ? "Active" : "Levee",
         tone: isPaused
           ? "bg-[#241e4d] text-[#ddd3ff]"
@@ -135,13 +149,15 @@ export function AgentSessionFooter() {
       },
       {
         label: "Total session",
-        value: sessionElapsed,
-        badge: `Sync ${lastSyncAt}`,
-        tone: "bg-[#223650] text-[#d7ecff]",
+        value: cumTotal,
+        badge: syncError ? "Erreur sync" : `Sync ${lastSyncAt}`,
+        tone: syncError
+          ? "bg-[#311a24] text-[#ffd7e1]"
+          : "bg-[#223650] text-[#d7ecff]",
         icon: PauseCircle,
       },
     ],
-    [agentStatus, isPaused, lastSyncAt, sessionElapsed, snapshot, stateElapsed],
+    [agentStatus, isPaused, lastSyncAt, syncError, stateElapsed, cumComm, cumQual, cumAtt, cumPause, cumTotal],
   );
 
   return (
@@ -155,8 +171,9 @@ export function AgentSessionFooter() {
                 Footer production agent
               </p>
               <p className="mt-1 text-sm text-white/62">
-                Lecture continue de la session et mise a jour mockee toutes les
-                5 minutes.
+                {syncError
+                  ? "Erreur de synchronisation — derniere valeur connue affichee."
+                  : `Statistiques journalieres — mise a jour toutes les 5 minutes. Sync ${lastSyncAt}.`}
               </p>
               <div className="mt-3 inline-flex items-center gap-3 rounded-[1rem] border border-white/10 bg-white/[0.05] px-3 py-2.5">
                 <div className="min-w-0">
