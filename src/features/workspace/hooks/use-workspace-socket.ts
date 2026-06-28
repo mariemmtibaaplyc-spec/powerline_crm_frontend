@@ -71,6 +71,9 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     if (!token || !userId || connectedRef.current) return;
 
     connectedRef.current = true;
+    // Tracker local à cette instance d'effet — permet au cleanup de distinguer
+    // un vrai démontage (token changé) d'un cycle React StrictMode (même token).
+    let thisEffectActive = true;
 
     // ── 1. Namespace /calls ──────────────────────────────────────────────────
     const callsSocket = getCallsSocket(token);
@@ -89,6 +92,24 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     }) => {
       const startedAt = Date.now();
 
+      // ── Garde anti-race ──────────────────────────────────────────────────────
+      // Ignorer l'événement si :
+      //   a) qualification ouverte (écrase l'état de qualification en cours)
+      //   b) fin d'appel en cours (efface les verrous isEndingCall/endingCallId)
+      //   c) un appel différent est déjà actif (event retardé d'un ancien appel)
+      const snapshot = useWorkspaceStore.getState();
+      const activeCallId = snapshot.callSession.backendCallId;
+      const isStale =
+        snapshot.qualificationPanelOpen ||
+        snapshot.isEndingCall ||
+        (activeCallId !== null && activeCallId !== data.call_id);
+      if (isStale) {
+        console.warn(
+          `[call.contact.popup] ignored stale/unsafe event callId=${data.call_id} activeCallId=${activeCallId ?? 'none'} qualificationPanelOpen=${snapshot.qualificationPanelOpen} isEndingCall=${snapshot.isEndingCall}`,
+        );
+        return;
+      }
+
       // Mettre à jour la fiche prospect
       store.setActiveProspect(mapContactToProspect(data.contact));
 
@@ -104,7 +125,7 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
           endingCallId:     null,
           callSession: {
             active:           true,
-            direction:        state.callSession.direction ?? null,
+            direction:        "predictive",
             currentNumber:    data.contact.phone,
             activeReminderId: state.callSession.activeReminderId,
             startedAt:        state.callSession.startedAt ?? startedAt,
@@ -117,17 +138,23 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
           },
         };
       });
+      console.log(`[PredictiveCall] attached callId=${data.call_id} campaignId=${data.campaign?.id ?? 'none'}`);
 
-      // ── Auto-answer SIP : armer le flag AVANT que le INVITE arrive ─────────
-      // Pour un appel PRÉDICTIF, AmdHuman déclenche BridgeProcessor qui appelle
-      // l'agent (INVITE SIP). call.contact.popup est émis au même moment.
-      // onAutoAnswer?.() arme le flag → le INVITE sera auto-accepté.
-      // Pour un appel MANUEL CRM-initiated (call.initiated), voir ci-dessous.
+      // ── Auto-answer SIP ──────────────────────────────────────────────────────
       onAutoAnswer?.();
 
       if (data.campaign?.id) {
         const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
         const quals = await workspaceApi.getCampaignQualifications(data.campaign.id).catch(() => []);
+        // Après l'await, vérifier que l'appel n'a pas changé (async gap)
+        const current = useWorkspaceStore.getState();
+        const stillSameCall =
+          current.currentCallId === data.call_id ||
+          current.callSession.backendCallId === data.call_id;
+        if (!stillSameCall) {
+          console.log(`[call.contact.popup] skip qualifications stale callId=${data.call_id}`);
+          return;
+        }
         useWorkspaceStore.setState({
           backendQualifications: quals,
           activeCampaignId: data.campaign.id,
@@ -142,6 +169,20 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       call_id:      number;
       phone_number: string;
     }) => {
+      // ── Garde anti-race ────────────────────────────────────────────────────
+      const snap = useWorkspaceStore.getState();
+      const activeId = snap.callSession.backendCallId;
+      const isStale =
+        snap.qualificationPanelOpen ||
+        snap.isEndingCall ||
+        (activeId !== null && activeId !== data.call_id);
+      if (isStale) {
+        console.warn(
+          `[call.initiated] ignored stale/unsafe event callId=${data.call_id} activeCallId=${activeId ?? 'none'} qualificationPanelOpen=${snap.qualificationPanelOpen} isEndingCall=${snap.isEndingCall}`,
+        );
+        return;
+      }
+
       useWorkspaceStore.setState((state) => ({
         agentStatus:     "ringing",
         statusStartedAt: Date.now(),
@@ -150,6 +191,7 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
         endingCallId:    null,
         callSession: {
           ...state.callSession,
+          direction:    "manual",      // forcer la direction — empêche l'héritage d'une direction prédictive résiduelle
           backendCallId: data.call_id,
         },
       }));
@@ -158,10 +200,25 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     });
 
     // Client décroche → IN_CALL
-    callsSocket.on("call.answered", (_data: { call_id: number }) => {
-      useWorkspaceStore.setState({
-        agentStatus:     "in_call",
-        statusStartedAt: Date.now(),
+    // Filet de sécurité : si call.contact.popup n'a pas encore attaché le callId
+    // (race condition socket), on le rattache ici depuis call.answered.
+    callsSocket.on("call.answered", (data: { call_id: number; agent_id?: number }) => {
+      useWorkspaceStore.setState((state) => {
+        const needsCallId = !state.callSession.backendCallId && data.call_id;
+        if (needsCallId) {
+          console.log(`[PredictiveCall] attached callId=${data.call_id} from call.answered (fallback)`);
+        }
+        return {
+          agentStatus:     "in_call",
+          statusStartedAt: Date.now(),
+          currentCallId:   needsCallId ? data.call_id : state.currentCallId,
+          callSession: needsCallId ? {
+            ...state.callSession,
+            active:       true,
+            direction:    "predictive",
+            backendCallId: data.call_id,
+          } : state.callSession,
+        };
       });
     });
 
@@ -181,7 +238,8 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       const trackedCallId = currentState.currentCallId;
       const isCurrentCall =
         currentCallId === data.call_id || trackedCallId === data.call_id;
-      const isManualCall = currentState.callSession.direction === "manual";
+      const isManualCall    = currentState.callSession.direction === "manual";
+      const isPredictiveCall = currentState.callSession.direction === "predictive";
 
       console.log(
         `[call.ended] userId=${userId} agentId=${data.agent_id ?? userId} callId=${data.call_id} currentCallId=${currentCallId ?? 'none'} trackedCallId=${trackedCallId ?? 'none'} campaignId=${data.campaign_id ?? 'none'} qualificationId=${data.qualification_id ?? 'none'} action=${data.action ?? 'none'} source=${data.source ?? 'none'} eventStatus=${data.status ?? 'none'} direction=${currentState.callSession.direction ?? 'none'} status=${currentState.agentStatus}`,
@@ -198,12 +256,13 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
         useWorkspaceStore.setState({ activeCampaignId: data.campaign_id });
       }
 
-      if (data.action === "OPEN_QUALIFICATION" || isManualCall) {
-        // Pour les appels manuels, on ouvre toujours la qualification
-        // dès la fin du call courant, même si le backend le termine en FAILED.
+      if (data.action === "OPEN_QUALIFICATION" || isManualCall || isPredictiveCall) {
+        // Manuel : toujours ouvrir la qualification.
+        // Prédictif : ouvrir quand le backend signale OPEN_QUALIFICATION (AMI flow).
         store.openQualification();
+        const logPrefix = isPredictiveCall ? "[PredictiveHangup]" : "[ManualHangup]";
         console.log(
-          `[ManualHangup] qualification opened source=ws callId=${data.call_id} campaignId=${data.campaign_id ?? currentState.activeCampaignId ?? 'none'}`,
+          `${logPrefix} qualification opened source=ws callId=${data.call_id} campaignId=${data.campaign_id ?? currentState.activeCampaignId ?? 'none'}`,
         );
       } else {
         // Client a raccroché en premier → état hung_up, PAS de qualification
@@ -262,6 +321,7 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
 
     // ── 4. Cleanup ───────────────────────────────────────────────────────────
     return () => {
+      thisEffectActive = false;
       clearTimeout(initGuardTimer);
 
       callsSocket.off("connect");
@@ -273,8 +333,17 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       agentsSocket.off("connect");
       agentsSocket.off("agent.status.changed");
 
-      connectedRef.current = false;
-      isInitializingRef.current = false;
+      // Réinitialiser le guard uniquement si c'est un vrai changement de dépendances
+      // (token/userId changés), PAS pour un cycle React StrictMode (mêmes valeurs).
+      // En StrictMode dev, React démonte+remonte avec les mêmes deps — si on remet
+      // connectedRef à false, le second montage rouvre une connexion en doublon.
+      // On détecte un vrai changement en comparant les deps capturées dans la closure.
+      const currentToken  = effectiveToken;
+      const currentUserId = effectiveUserId;
+      if (currentToken !== token || currentUserId !== userId) {
+        connectedRef.current = false;
+        isInitializingRef.current = false;
+      }
       // Note : on ne disconnect() pas les sockets ici car ils sont singletons
       // dans socket-manager.ts. destroyAllSockets() sera appelé au logout.
     };

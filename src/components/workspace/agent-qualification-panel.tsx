@@ -169,7 +169,7 @@ const canSubmitQualification = selectedQualificationId !== null;
                 disabled={!canSubmitQualification}
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,#f0b57d_0%,#d99154_100%)] px-5 text-sm font-semibold text-[#1a2533] shadow-[0_18px_36px_rgba(217,145,84,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
               >
-                Suivant
+                Reprendre la file prédictive
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>

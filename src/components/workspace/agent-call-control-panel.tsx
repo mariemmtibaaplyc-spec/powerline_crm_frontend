@@ -75,8 +75,8 @@ export function AgentCallControlPanel() {
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const statusMenuRef = useRef<HTMLDivElement>(null);
   const now = useClientClock();
-  const canUseManualCall =
-    agentStatus === "paused" || agentStatus === "waiting";
+  // Appel manuel uniquement en pause — "waiting" = file prédictive active, pas de manuel
+  const canUseManualCall = agentStatus === "paused";
 
   const handleCallSubmit = useCallback(() => {
     if (!manualNumber || !canUseManualCall) return;
@@ -142,15 +142,19 @@ export function AgentCallControlPanel() {
   const canPauseFromCurrentState = agentStatus === "waiting";
 
   useEffect(() => {
+    const mode = agentStatus === "paused" ? "manual" : agentStatus === "waiting" ? "predictive" : "other";
+    console.log(
+      `[AgentCallControlPanel] agentStatus=${agentStatus} mode=${mode} canManualCall=${canUseManualCall}`,
+    );
     if (canUseManualCall) return;
     setDialPadOpen(false);
     setManualNumber("");
-  }, [canUseManualCall]);
+  }, [agentStatus, canUseManualCall]);
 
   const availabilityAction = isPaused
     ? {
-        label: "Reprendre",
-        hint: "Revenir dans la file d'attente",
+        label: "Reprendre la file",
+        hint: "Rejoindre la file prédictive",
         icon: Play,
         tone:
           "border-[#cfeee4] bg-[linear-gradient(135deg,#14a57e_0%,#0f8b6d_100%)] text-white shadow-[0_18px_36px_rgba(15,139,109,0.2)]",
@@ -310,7 +314,7 @@ export function AgentCallControlPanel() {
               const Icon = action.icon;
               const isManualCall = action.label === "Appel manuel";
               const isAvailabilityAction =
-                action.label === "Reprendre" || action.label === "Pause";
+                action.label === "Reprendre la file" || action.label === "Pause";
               const isHangupAction = action.label === "Raccrocher";
               const isHighlighted =
                 isAvailabilityAction
@@ -318,7 +322,7 @@ export function AgentCallControlPanel() {
                   : action.label === currentStatusMeta.emphasisAction;
               const actionHint =
                 isManualCall && !canUseManualCall
-                  ? "Disponible seulement en pause ou en attente"
+                  ? "Mettez-vous en pause pour passer un appel manuel"
                   : isHangupAction && canOpenQualificationFromHangup
                     ? agentStatus === "hung_up"
                       ? "Ouvrir la qualification de l'appel raccroche"
@@ -338,7 +342,7 @@ export function AgentCallControlPanel() {
                             ? handleManualCallOpen
                             : undefined
                         : isAvailabilityAction
-                          ? action.label === "Reprendre"
+                          ? action.label === "Reprendre la file"
                             ? resumeQueue
                             : canPauseFromCurrentState
                               ? () => setAgentStatus("paused")
@@ -374,18 +378,21 @@ export function AgentCallControlPanel() {
         // Raccrocher le canal WebRTC local
         sipHangup();
 
+        const isPredictive = callSession.direction === "predictive";
+        const logPrefix = isPredictive ? "[PredictiveHangup]" : "[ManualHangup]";
+
         console.log(
-          `[ManualHangup] end start callId=${callId ?? 'none'} campaignId=${activeCampaignId ?? 'none'} status=${liveAgentStatus} direction=${callSession.direction ?? 'none'} qualificationPanelOpen=${qualificationPanelOpen}`,
+          `${logPrefix} end start callId=${callId ?? 'none'} campaignId=${activeCampaignId ?? 'none'} status=${liveAgentStatus} direction=${callSession.direction ?? 'none'} qualificationPanelOpen=${qualificationPanelOpen}`,
         );
 
         if (
           liveAgentStatus === "hung_up" ||
-          (callSession.direction === "manual" && callSession.active === false && callId)
+          ((callSession.direction === "manual" || isPredictive) && callSession.active === false && callId)
         ) {
           // Le call est déjà terminé côté backend/UI → ouvrir la qualification localement
           openQualification();
           console.log(
-            `[ManualHangup] qualification opened source=local callId=${callId ?? 'none'} campaignId=${activeCampaignId ?? 'none'}`,
+            `${logPrefix} qualification opened source=local callId=${callId ?? 'none'} campaignId=${activeCampaignId ?? 'none'}`,
           );
           return;
         }
@@ -393,33 +400,44 @@ export function AgentCallControlPanel() {
         if (callId) {
           try {
             const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
-            
+
             if (callSession.direction === "manual") {
-              // Raccrocher le canal côté Asterisk via AMI
+              // Raccrocher le canal côté Asterisk via AMI (manuel uniquement)
               await workspaceApi.hangupCall(callId).catch((err) => {
                 console.warn("[hangup] Asterisk hangup command failed (non-blocking):", err);
               });
             }
 
+            // Pour le prédictif : sipHangup() ci-dessus a envoyé le BYE SIP →
+            // Asterisk reçoit le raccroché → AMI envoie call.ended + OPEN_QUALIFICATION
+            // On appelle aussi endCall pour marquer l'appel en DB (idempotent si AMI arrive en premier).
             await workspaceApi.endCall(callId, {});
-            if (callSession.direction === "manual") {
+
+            if (isPredictive) {
+              // Prédictif : la qualification viendra via le WS call.ended (AMI flow)
+              // On n'ouvre pas localement — évite le double
+              console.log(
+                `${logPrefix} endCall sent, waiting for call.ended WS callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
+              );
+            } else {
+              // Manuel : ouvrir la qualification immédiatement (le WS n'est pas fiable pour tous les cas manuels)
               openQualification();
               console.log(
-                `[ManualHangup] qualification opened source=http callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
+                `${logPrefix} qualification opened source=http callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
               );
             }
           } catch (err) {
             console.error("[hangup] endCall failed:", err);
-            // Fallback : ouvrir la qualification localement quand même
+            // Fallback : ouvrir la qualification localement
             markAgentHungUp();
             openQualification();
             console.log(
-              `[ManualHangup] qualification opened source=http_fallback callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
+              `${logPrefix} qualification opened source=http_fallback callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
             );
           }
         } else {
           console.warn(
-            `[ManualHangup] skip qualification because no backend call exists callId=none campaignId=${activeCampaignId ?? 'none'} status=${liveAgentStatus}`,
+            `${logPrefix} skip qualification because no backend call exists callId=none campaignId=${activeCampaignId ?? 'none'} status=${liveAgentStatus}`,
           );
           // Pas de callId backend → ne pas ouvrir de qualification
           markAgentHungUp();

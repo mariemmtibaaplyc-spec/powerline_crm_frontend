@@ -150,7 +150,7 @@ export interface HistoryEntry {
 
 export interface CallSession {
   active: boolean;
-  direction: "manual" | "reminder" | null;
+  direction: "manual" | "reminder" | "predictive" | null;
   currentNumber: string | null;
   activeReminderId: Id | null;
   startedAt: number | null;

@@ -75,12 +75,15 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
   const audioRef        = useRef<HTMLAudioElement | null>(null);
   const audioCtxRef     = useRef<AudioContext | null>(null);
   const stopRingtoneRef = useRef<(() => void) | null>(null);
+  const retryTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryCountRef   = useRef(0);
 
   // ── Auto-answer flag ────────────────────────────────────────────────────
   // Armé par triggerAutoAnswer() depuis use-workspace-socket.ts.
   // Consommé (remis à false) dès que le INVITE SIP arrive.
-  // TTL 10s : si le INVITE n'arrive pas dans ce délai, désarmer pour
+  // TTL 55s : si le INVITE n'arrive pas dans ce délai, désarmer pour
   // éviter d'auto-répondre à un appel ultérieur non lié.
+  // Le header SIP X-AUTOANSWER=true reste prioritaire même après expiration du flag.
   const pendingAutoAnswer  = useRef(false);
   const autoAnswerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -101,12 +104,39 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
     if (!effectiveUserId) { cleanupSip(); return; }
 
     let isMounted = true;
+    retryCountRef.current = 0;
 
-    workspaceApi.getWebRtcCredentials()
-      .then((credentials) => { if (isMounted) initSip(credentials); })
-      .catch((err) => console.error("[SipPhoneProvider] Failed to fetch WebRTC credentials:", err));
+    const tryInit = () => {
+      workspaceApi.getWebRtcCredentials()
+        .then((credentials) => {
+          if (!isMounted) return;
+          retryCountRef.current = 0;
+          initSip(credentials, () => {
+            // Appelé quand le WS se ferme de façon inattendue → retry avec backoff
+            if (!isMounted) return;
+            const delay = Math.min(2000 * 2 ** retryCountRef.current, 30_000);
+            retryCountRef.current += 1;
+            console.warn(`[SipPhoneProvider] WS fermé, retry #${retryCountRef.current} dans ${delay / 1000}s`);
+            retryTimerRef.current = setTimeout(tryInit, delay);
+          });
+        })
+        .catch((err) => {
+          if (!isMounted) return;
+          console.error("[SipPhoneProvider] Failed to fetch WebRTC credentials:", err);
+          const delay = Math.min(2000 * 2 ** retryCountRef.current, 30_000);
+          retryCountRef.current += 1;
+          console.warn(`[SipPhoneProvider] Credentials KO, retry #${retryCountRef.current} dans ${delay / 1000}s`);
+          retryTimerRef.current = setTimeout(tryInit, delay);
+        });
+    };
 
-    return () => { isMounted = false; cleanupSip(); };
+    tryInit();
+
+    return () => {
+      isMounted = false;
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      cleanupSip();
+    };
   }, [effectiveUserId]);
 
   // ── triggerAutoAnswer — appelé depuis use-workspace-socket.ts ──────────
@@ -119,13 +149,15 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
 
     pendingAutoAnswer.current = true;
 
-    // TTL 10s
+    // TTL 55s — en manuel, l'INVITE arrive seulement après que le client décroche
+    // (Dial OVH timeout = 45s), donc le flag doit vivre au moins 50s.
+    // Après expiration, X-AUTOANSWER header dans l'INVITE reste prioritaire (fallback).
     autoAnswerTimerRef.current = setTimeout(() => {
       if (pendingAutoAnswer.current) {
-        console.warn("[SipPhoneProvider] Auto-answer flag expired (no INVITE in 10s)");
+        console.log("[SipPhoneProvider] Auto-answer flag expired (no INVITE in 55s) — X-AUTOANSWER header will handle it if INVITE arrives later");
         pendingAutoAnswer.current = false;
       }
-    }, 10_000);
+    }, 55_000);
 
     // Cas race : INVITE arrivé avant le WS → accepter immédiatement
     if (sessionRef.current && sessionRef.current.state === SessionState.Initial) {
@@ -203,7 +235,7 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const initSip = async (credentials: any) => {
+  const initSip = async (credentials: any, onDisconnect?: () => void) => {
     try {
       cleanupSip();
       console.log(`[SipPhoneProvider] Initializing SIP UA for ${credentials.username} on ${credentials.wsServer}`);
@@ -248,12 +280,13 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
           //   ou call.initiated (manuel), via triggerAutoAnswer()
           //   → aucune dépendance au header SIP
 
-          const shouldAutoAnswer = pendingAutoAnswer.current;
-
-          // Trace conservée pour diagnostic — ne plus en dépendre
           const headerVal = (invitation.request as any).getHeader?.("X-AUTOANSWER");
+          const sipHeaderAutoAnswer = String(headerVal ?? "").toLowerCase() === "true";
+          const flagAutoAnswer = pendingAutoAnswer.current;
+          const shouldAutoAnswer = sipHeaderAutoAnswer || flagAutoAnswer;
+
           console.log(
-            `[SipPhoneProvider] Received incoming INVITE. X-AUTOANSWER=${headerVal ?? "absent"} | pendingAutoAnswer=${shouldAutoAnswer}`
+            `[SipPhoneProvider] Received incoming INVITE. X-AUTOANSWER=${headerVal ?? "absent"} | pendingAutoAnswer=${flagAutoAnswer} | shouldAutoAnswer=${shouldAutoAnswer}`
           );
 
           setupSessionListeners(invitation);
@@ -261,10 +294,16 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
           if (shouldAutoAnswer) {
             pendingAutoAnswer.current = false;
             if (autoAnswerTimerRef.current) clearTimeout(autoAnswerTimerRef.current);
-            console.log("[SipPhoneProvider] Auto-answering (triggered by WS event)");
+            if (sipHeaderAutoAnswer && !flagAutoAnswer) {
+              console.log("[SipPhoneProvider] Auto-answer accepted from SIP header (flag had expired)");
+            } else if (sipHeaderAutoAnswer) {
+              console.log("[SipPhoneProvider] Auto-answering (SIP header + WS flag)");
+            } else {
+              console.log("[SipPhoneProvider] Auto-answering (triggered by WS event)");
+            }
             _doAccept(invitation);
           } else {
-            console.log("[SipPhoneProvider] No auto-answer flag → ringing, waiting for agent to answer");
+            console.log("[SipPhoneProvider] No auto-answer signal → ringing, waiting for agent to answer");
             setHasIncomingCall(true);
             try {
               if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
@@ -278,6 +317,15 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
         },
       };
 
+      // Retry automatique si le WebSocket se ferme de façon inattendue
+      ua.transport.onDisconnect = (error?: Error) => {
+        if (error) {
+          console.warn("[SipPhoneProvider] Transport déconnecté avec erreur:", error.message);
+          setRegistered(false);
+          onDisconnect?.();
+        }
+      };
+
       const registerer = new Registerer(ua);
       uaRef.current         = ua;
       registererRef.current = registerer;
@@ -288,6 +336,7 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
       console.log("[SipPhoneProvider] SIP UA Registered successfully");
     } catch (err) {
       console.error("[SipPhoneProvider] Error in SIP initialization:", err);
+      onDisconnect?.();
     }
   };
 
