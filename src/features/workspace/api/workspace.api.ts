@@ -1,6 +1,8 @@
 // src/features/workspace/api/workspace.api.ts
 
 import { apiClient } from "@/lib/axios";
+import type { HistoryEntry } from "@/types/workspace.types";
+import { createUnknownManualCallProspect } from "@/features/workspace/mocks/prospects.mock";
 
 // ─── Types réponse ────────────────────────────────────────────────────────────
 
@@ -62,6 +64,83 @@ export interface ContactSearchResult {
   postal_code?: string | null;
   city?: string | null;
   custom_fields?: Record<string, any> | null;
+}
+
+// ─── Agent history mapping ────────────────────────────────────────────────────
+
+// FRAGILITÉ : le matching sur le nom de qualification est textuel (insensible casse/accents).
+// Un admin qui renomme une qualification peut casser le matching — il retombera sur le filet
+// par type (POSITIVE/NEGATIVE/NEUTRAL) sans planter, mais le badge peut changer de sens.
+// À surveiller si des qualifications sont renommées ou ajoutées.
+function normalizeStr(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
+function mapCallToHistoryStatus(
+  callStatus: string,
+  qualification?: { name: string; type: string } | null,
+): HistoryStatus {
+  if (qualification) {
+    const n = normalizeStr(qualification.name);
+    if (n.includes("rdv"))                                         return "appointment";
+    if (n.includes("rappel"))                                      return "follow_up";
+    if (n.includes("repondeur"))                                   return "voicemail";
+    if (n.includes("pas appeler") || n.includes("ne pas"))        return "refused";
+    if (n.includes("pas interess") || n.includes("non interess")) return "refused";
+    if (n.includes("deconnect"))                                   return "unreachable";
+    if (qualification.type === "POSITIVE")                         return "completed";
+    if (qualification.type === "NEGATIVE")                         return "refused";
+    return "follow_up"; // NEUTRAL ou inconnu
+  }
+  if (callStatus === "AMD_MACHINE") return "voicemail";
+  if (callStatus === "COMPLETED")   return "completed";
+  return "unreachable"; // MISSED, NO_ANSWER, BUSY, FAILED, ABANDONED
+}
+
+function mapBackendCallToHistoryEntry(call: any): HistoryEntry {
+  const startedAt = new Date(call.started_at);
+  const date = call.started_at.slice(0, 10);
+  const time = startedAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+  const contact = call.contact as ContactSearchResult | null | undefined;
+  const clientName =
+    contact
+      ? `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim() || call.phone_number
+      : call.phone_number;
+
+  const prospect: ProspectSheet = contact
+    ? {
+        id:            String(contact.id),
+        firstName:     contact.first_name  ?? "",
+        lastName:      contact.last_name   ?? "",
+        phone:         contact.phone       ?? call.phone_number,
+        phoneSecondary: contact.phone2     ?? "",
+        email:         contact.email       ?? "",
+        address:       contact.address     ?? "",
+        postalCode:    contact.postal_code ?? "",
+        city:          contact.city        ?? "",
+        comments:
+          typeof contact.custom_fields?.commentaires === "string"
+            ? contact.custom_fields.commentaires
+            : "",
+      }
+    : createUnknownManualCallProspect(call.phone_number);
+
+  return {
+    id:       String(call.id),
+    date,
+    time,
+    clientName,
+    phone:    call.phone_number,
+    campaign: call.campaign?.name ?? "",
+    queue:    "",
+    result:   call.qualification?.name ?? call.result ?? call.status,
+    summary:  call.notes ?? "",
+    status:   mapCallToHistoryStatus(call.status, call.qualification),
+    prospect,
+    qualificationCode:  undefined,
+    qualificationLabel: call.qualification?.name,
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -169,6 +248,16 @@ export const workspaceApi = {
     });
     const payload = unwrap<any>(data);
     return Array.isArray(payload) ? payload : (payload?.items ?? payload?.data ?? []);
+  },
+
+  // ── Agent call history ───────────────────────────────────────────────────────
+
+  async getAgentHistory(agentId: number, date: string): Promise<HistoryEntry[]> {
+    const { data } = await apiClient.get("/calls/agent-history", {
+      params: { agent_id: agentId, date },
+    });
+    const rows: any[] = Array.isArray(data) ? data : (unwrap<any>(data) ?? []);
+    return rows.map(mapBackendCallToHistoryEntry);
   },
 
   // ── Daily session stats (footer) ─────────────────────────────────────────────

@@ -149,12 +149,7 @@ export function CallsTable({
                   </TableCell>
 
                   <TableCell className="align-top">
-                    <div className="space-y-1">
-                      <p className="font-medium text-[#102033]">
-                        {item.campaign}
-                      </p>
-                      <p className="text-sm text-[#607287]">{item.queue}</p>
-                    </div>
+                    <p className="font-medium text-[#102033]">{item.campaign}</p>
                   </TableCell>
 
                   <TableCell className="align-top">

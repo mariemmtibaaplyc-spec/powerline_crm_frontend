@@ -3,11 +3,7 @@ import {
   MOCK_AGENT_IDENTITY,
   PAUSE_OPTIONS,
 } from "@/features/workspace/mocks/agent.mock";
-import { createMockHistory } from "@/features/workspace/mocks/history.mock";
-import {
-  formatInputDate,
-  prospectFullName,
-} from "@/features/workspace/mocks/mock.utils";
+import { formatInputDate } from "@/features/workspace/mocks/mock.utils";
 import { createUnknownManualCallProspect } from "@/features/workspace/mocks/prospects.mock";
 import { findQualificationOption } from "@/features/workspace/mocks/qualifications.mock";
 import { createMockReminders } from "@/features/workspace/mocks/reminders.mock";
@@ -19,7 +15,6 @@ import type {
   AppointmentFormValues,
   CallSession,
   HistoryEntry,
-  HistoryStatus,
   PauseType,
   ProspectSheet,
   QualificationRecord,
@@ -96,6 +91,8 @@ interface AgentWorkspaceStoreState {
   markClientHungUp: () => void;
   markAgentHungUp: () => void;
 
+  fetchHistory: (date: string) => Promise<void>;
+
   // ── Actions AJOUT Backend ─────────────────────────────────────────────────
   initFromSession: (params: {
     userId: number;
@@ -164,7 +161,7 @@ function createInitialState() {
     pendingQualificationNextStatus: null as "paused" | "waiting" | null,
     appointments: [] as AppointmentEntry[],
     reminders: createMockReminders(today),
-    historyEntries: createMockHistory(today),
+    historyEntries: [] as HistoryEntry[],
   };
 }
 
@@ -198,133 +195,6 @@ function nextCallSessionForStatus(
     active: false,
     startedAt: currentSession.startedAt,
   } satisfies CallSession;
-}
-
-function formatHistoryTime(date: Date) {
-  return date.toLocaleTimeString("fr-FR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function mapQualificationToHistoryStatus(code: QualificationCode): HistoryStatus {
-  switch (code) {
-    case "callback":
-      return "follow_up";
-    case "appointment":
-      return "appointment";
-    case "wrong_number":
-    case "disconnected_number":
-    case "no_answer":
-    case "busy":
-      return "unreachable";
-    case "do_not_call":
-    case "not_interested":
-    case "no_budget":
-    case "sale_refused":
-      return "refused";
-    case "voicemail":
-      return "voicemail";
-    default:
-      return "completed";
-  }
-}
-
-function createQualificationSummary(
-  code: QualificationCode,
-  label: string,
-  nextStatus: "paused" | "waiting",
-  reminderDetails?: ReminderFormValues,
-  appointmentDetails?: AppointmentFormValues,
-) {
-  const closeout =
-    nextStatus === "paused"
-      ? "L'agent passe ensuite en pause."
-      : "L'agent retourne ensuite en attente.";
-
-  switch (code) {
-    case "callback":
-      return `Rappel programme le ${reminderDetails?.date ?? "--"} a ${reminderDetails?.time ?? "--"}${reminderDetails?.note ? ` pour ${reminderDetails.note.toLowerCase()}` : ""}. ${closeout}`;
-    case "appointment":
-      return `RDV programme le ${appointmentDetails?.date ?? "--"} a ${appointmentDetails?.time ?? "--"}${appointmentDetails?.note ? ` pour ${appointmentDetails.note.toLowerCase()}` : ""}. ${closeout}`;
-    case "do_not_call":
-      return `Demande ${label.toLowerCase()} enregistree sur la fiche active. ${closeout}`;
-    case "call_transferred":
-      return `Issue ${label.toLowerCase()} enregistree apres cloture de l'appel. ${closeout}`;
-    case "voicemail":
-      return `Issue ${label.toLowerCase()} enregistree sans nouvel echange. ${closeout}`;
-    default:
-      return `Qualification ${label.toLowerCase()} enregistree dans l'historique. ${closeout}`;
-  }
-}
-
-function createQualificationHistoryEntry(
-  state: AgentWorkspaceStoreState,
-  record: QualificationRecord,
-  recordedAt: Date,
-  reminderDetails?: ReminderFormValues,
-  appointmentDetails?: AppointmentFormValues,
-): HistoryEntry {
-  return {
-    id: `history-${record.recordedAt}`,
-    date: formatInputDate(recordedAt),
-    time: formatHistoryTime(recordedAt),
-    clientName: prospectFullName(state.activeProspect),
-    phone: state.callSession.currentNumber ?? state.activeProspect.phone,
-    campaign: state.callSession.campaign ?? state.agentIdentity.campaign,
-    queue: state.callSession.queue ?? state.agentIdentity.group,
-    result: record.label,
-    summary: createQualificationSummary(
-      record.code,
-      record.label,
-      record.nextStatus,
-      reminderDetails,
-      appointmentDetails,
-    ),
-    status: mapQualificationToHistoryStatus(record.code),
-    prospect: state.activeProspect,
-    qualificationCode: record.code,
-    qualificationLabel: record.label,
-  };
-}
-
-function createQualificationReminder(
-  state: AgentWorkspaceStoreState,
-  record: QualificationRecord,
-  reminderId: string,
-  values: ReminderFormValues,
-): Reminder {
-  return {
-    id: reminderId,
-    date: values.date,
-    time: values.time,
-    clientName: prospectFullName(state.activeProspect),
-    phone: state.callSession.currentNumber ?? state.activeProspect.phone,
-    campaign: state.callSession.campaign ?? state.agentIdentity.campaign,
-    queue: state.callSession.queue ?? state.agentIdentity.group,
-    note: values.note,
-    status: "planned",
-    prospect: state.activeProspect,
-  };
-}
-
-function createQualificationAppointment(
-  state: AgentWorkspaceStoreState,
-  record: QualificationRecord,
-  appointmentId: string,
-  values: AppointmentFormValues,
-): AppointmentEntry {
-  return {
-    id: appointmentId,
-    date: values.date,
-    time: values.time,
-    clientName: prospectFullName(state.activeProspect),
-    phone: state.callSession.currentNumber ?? state.activeProspect.phone,
-    campaign: state.callSession.campaign ?? state.agentIdentity.campaign,
-    queue: state.callSession.queue ?? state.agentIdentity.group,
-    note: values.note,
-    prospect: state.activeProspect,
-  };
 }
 
 function applyStatusTransition(
@@ -578,6 +448,9 @@ startPause: (pauseCode) => {
     }
   }
 
+  // Refetch historique pour afficher le nouvel appel qualifié
+  useWorkspaceStore.getState().fetchHistory(formatInputDate(new Date())).catch(() => {});
+
   console.log(
     `[ManualHangup] state cleanup after qualification callId=${callId} campaignId=${activeCampaignId ?? 'none'} nextStatus=${nextStatus}`,
   );
@@ -659,6 +532,9 @@ startPause: (pauseCode) => {
         workspaceApi.setAvailable(userId).catch(console.error);
       }
     }
+
+    // Refetch historique
+    useWorkspaceStore.getState().fetchHistory(formatInputDate(new Date())).catch(() => {});
   }
 
   set((state) => ({
@@ -741,6 +617,9 @@ startPause: (pauseCode) => {
         workspaceApi.setAvailable(userId).catch(console.error);
       }
     }
+
+    // Refetch historique
+    useWorkspaceStore.getState().fetchHistory(formatInputDate(new Date())).catch(() => {});
   }
 
   set((state) => ({
@@ -1013,6 +892,18 @@ startPause: (pauseCode) => {
     } catch (err) {
       console.error("[initFromSession] setPaused failed:", err);
       // Non bloquant : le statut UI reste PAUSED localement
+    }
+  },
+
+  fetchHistory: async (date) => {
+    const { userId } = useWorkspaceStore.getState();
+    if (!userId) return;
+    try {
+      const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+      const entries = await workspaceApi.getAgentHistory(userId, date);
+      set({ historyEntries: entries });
+    } catch (err) {
+      console.error("[fetchHistory] failed:", err);
     }
   },
 

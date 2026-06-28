@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BellRing, CalendarDays, RotateCcw } from "lucide-react";
 import {
@@ -22,9 +22,14 @@ function formatDisplayDate(value: string) {
 
 export default function Page() {
   const router = useRouter();
-  const { historyEntries, openReminderCall } = useAgentWorkspaceState();
+  const { historyEntries, openReminderCall, fetchHistory } = useAgentWorkspaceState();
   const today = formatInputDate(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
+
+  // Charger l'historique depuis le backend à l'affichage et à chaque changement de date
+  useEffect(() => {
+    fetchHistory(selectedDate);
+  }, [selectedDate, fetchHistory]);
 
   const filteredHistory = useMemo(
     () => historyEntries.filter((item) => item.date === selectedDate),
