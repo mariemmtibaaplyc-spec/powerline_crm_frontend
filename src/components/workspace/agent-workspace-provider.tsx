@@ -8,7 +8,6 @@ import {
   PAUSE_OPTIONS,
 } from "@/features/workspace/mocks/agent.mock";
 import { DEFAULT_AGENT_PROSPECT } from "@/features/workspace/mocks/prospects.mock";
-import { QUALIFICATION_GROUPS } from "@/features/workspace/mocks/qualifications.mock";
 import { useWorkspace } from "@/features/workspace/hooks/use-workspace";
 import type {
   AgentStatus,
@@ -50,7 +49,6 @@ export {
   DEFAULT_AGENT_PROSPECT,
   MOCK_AGENT_IDENTITY,
   PAUSE_OPTIONS,
-  QUALIFICATION_GROUPS,
 };
 
 export function formatAgentElapsedTime(milliseconds: number) {
@@ -160,7 +158,6 @@ export function useAgentWorkspaceState() {
     activeReminderId: state.callSession.activeReminderId,
     selectedPauseType,
     pauseOptions: PAUSE_OPTIONS,
-    qualificationGroups: QUALIFICATION_GROUPS,
     agentIdentity: state.agentIdentity ?? MOCK_AGENT_IDENTITY,
     backendQualifications: state.backendQualifications,
     selectedQualificationId: state.selectedQualificationId,

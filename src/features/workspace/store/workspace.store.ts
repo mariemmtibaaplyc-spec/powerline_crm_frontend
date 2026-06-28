@@ -5,7 +5,6 @@ import {
 } from "@/features/workspace/mocks/agent.mock";
 import { formatInputDate } from "@/features/workspace/mocks/mock.utils";
 import { createUnknownManualCallProspect } from "@/features/workspace/mocks/prospects.mock";
-import { findQualificationOption } from "@/features/workspace/mocks/qualifications.mock";
 import { createMockReminders } from "@/features/workspace/mocks/reminders.mock";
 import type {
   ActivePause,
@@ -84,7 +83,6 @@ interface AgentWorkspaceStoreState {
   submitReminderQualification: (values: ReminderFormValues) => void;
   cancelAppointmentForm: () => void;
   submitAppointmentQualification: (values: AppointmentFormValues) => void;
-  selectQualification: (code: QualificationCode | null) => void;
   startManualCall: (number: string) => Promise<void>;
   openReminderCall: (entry: Reminder | HistoryEntry) => void;
   setActiveProspect: (prospect: ProspectSheet) => void;
@@ -641,41 +639,6 @@ startPause: (pauseCode) => {
     callSession: createIdleCallSession(),
   }));
 },
-  selectQualification: (code) =>
-    set((state) => {
-      const selectedOption = findQualificationOption(code);
-      const selectedCode = selectedOption?.code ?? null;
-
-      if (selectedCode === "callback") {
-        return {
-          ...state,
-          selectedQualification: selectedCode,
-          reminderFormOpen: true,
-          appointmentFormOpen: false,
-          pendingQualificationNextStatus:
-            state.pendingQualificationNextStatus ?? "waiting",
-        };
-      }
-
-      if (selectedCode === "appointment") {
-        return {
-          ...state,
-          selectedQualification: selectedCode,
-          reminderFormOpen: false,
-          appointmentFormOpen: true,
-          pendingQualificationNextStatus: "waiting",
-        };
-      }
-
-      return {
-        ...state,
-        selectedQualification: selectedCode,
-        reminderFormOpen: false,
-        appointmentFormOpen: false,
-        pendingQualificationNextStatus: null,
-      };
-    }),
-
   startManualCall: async (number: string) => {
   const { userId, activeCampaignId, sipExtension } = useWorkspaceStore.getState();
   if (!userId) {
