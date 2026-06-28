@@ -2,11 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Activity, Clock3, Coffee, PauseCircle, TimerReset } from "lucide-react";
-import {
-  formatAgentElapsedTime,
-  useAgentWorkspaceState,
-} from "@/components/workspace/agent-workspace-provider";
-import { useClientClock } from "@/features/workspace/hooks/use-client-clock";
+import { useAgentWorkspaceState } from "@/components/workspace/agent-workspace-provider";
 import { cn } from "@/lib/utils";
 
 const POLL_INTERVAL_MS = 300_000; // 5 minutes
@@ -40,17 +36,13 @@ export function AgentSessionFooter() {
     appointments,
     currentStatusMeta,
     isPaused,
-    statusStartedAt,
     userId,
   } = useAgentWorkspaceState();
 
-  const now = useClientClock();
+  const [dailyStats, setDailyStats] = useState<DailyStats | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState("--:--");
+  const [syncError, setSyncError]   = useState(false);
 
-  const [dailyStats, setDailyStats]   = useState<DailyStats | null>(null);
-  const [lastSyncAt, setLastSyncAt]   = useState("--:--");
-  const [syncError, setSyncError]     = useState(false);
-
-  // Charger les stats depuis le backend et renouveler toutes les 5 minutes
   useEffect(() => {
     if (!userId) return;
 
@@ -73,11 +65,7 @@ export function AgentSessionFooter() {
 
   const totalAppointments = appointments.length;
 
-  // Chrono "statut actif en cours" — rafraîchi chaque seconde par useClientClock
-  const stateElapsed =
-    now === 0 ? "00:00:00" : formatAgentElapsedTime(now - statusStartedAt);
-
-  // Durées cumulées depuis le backend, avec fallback "00:00:00" avant le premier poll
+  // Durées cumulées depuis le backend — figées entre deux polls
   const cumComm  = dailyStats ? secondsToHms(dailyStats.communication_seconds) : "00:00:00";
   const cumQual  = dailyStats ? secondsToHms(dailyStats.qualification_seconds) : "00:00:00";
   const cumAtt   = dailyStats ? secondsToHms(dailyStats.attente_seconds)       : "00:00:00";
@@ -88,14 +76,7 @@ export function AgentSessionFooter() {
     () => [
       {
         label: "Communication",
-        // Si l'agent est en cours d'appel, affiche le chrono live pour la période active ;
-        // le backend sera mis à jour lors du prochain poll (ended_at=NULL → COALESCE NOW())
-        value:
-          agentStatus === "in_call" ||
-          agentStatus === "ringing" ||
-          agentStatus === "hung_up"
-            ? stateElapsed
-            : cumComm,
+        value: cumComm,
         badge:
           agentStatus === "in_call"
             ? "Active"
@@ -120,7 +101,7 @@ export function AgentSessionFooter() {
       },
       {
         label: "Qualification",
-        value: agentStatus === "qualification" ? stateElapsed : cumQual,
+        value: cumQual,
         badge: agentStatus === "qualification" ? "Active" : "Suivi fiche",
         tone:
           agentStatus === "qualification"
@@ -130,7 +111,7 @@ export function AgentSessionFooter() {
       },
       {
         label: "Attente",
-        value: agentStatus === "waiting" ? stateElapsed : cumAtt,
+        value: cumAtt,
         badge: agentStatus === "waiting" ? "Active" : "File",
         tone:
           agentStatus === "waiting"
@@ -140,7 +121,7 @@ export function AgentSessionFooter() {
       },
       {
         label: "Pause",
-        value: isPaused ? stateElapsed : cumPause,
+        value: cumPause,
         badge: isPaused ? "Active" : "Levee",
         tone: isPaused
           ? "bg-[#241e4d] text-[#ddd3ff]"
@@ -157,7 +138,7 @@ export function AgentSessionFooter() {
         icon: PauseCircle,
       },
     ],
-    [agentStatus, isPaused, lastSyncAt, syncError, stateElapsed, cumComm, cumQual, cumAtt, cumPause, cumTotal],
+    [agentStatus, isPaused, lastSyncAt, syncError, cumComm, cumQual, cumAtt, cumPause, cumTotal],
   );
 
   return (
