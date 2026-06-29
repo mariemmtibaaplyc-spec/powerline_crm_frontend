@@ -256,8 +256,10 @@ export function Sidebar() {
   const pathname = usePathname();
   const session = useSessionStore((state) => state.session);
   const authSession = useAuthStore((state) => state.session);
-  const appointments = useWorkspaceStore((state) => state.appointments);
-  const historyEntries = useWorkspaceStore((state) => state.historyEntries);
+  const dailyStatsCache = useWorkspaceStore((state) => state.dailyStatsCache);
+  // null avant le premier poll → affiche "—" (pas "0" trompeur)
+  const rdvCount   = dailyStatsCache?.appointments_today ?? null;
+  const callsCount = dailyStatsCache?.calls_today        ?? null;
   const isAdmin = pathname.startsWith("/admin");
   const isSupervisor = pathname.startsWith("/supervisor");
   const isAgent = pathname.startsWith("/agent");
@@ -478,7 +480,7 @@ export function Sidebar() {
             <div className="mt-3 grid grid-cols-2 gap-2.5">
               <div className="rounded-[0.95rem] border border-white/7 bg-black/10 px-3 py-3.5 text-center">
                 <p className="text-[1.6rem] font-semibold leading-none text-white">
-                  {appointments.length}
+                  {rdvCount ?? "—"}
                 </p>
                 <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-white/42">
                   RDV
@@ -486,7 +488,7 @@ export function Sidebar() {
               </div>
               <div className="rounded-[0.95rem] border border-white/7 bg-black/10 px-3 py-3.5 text-center">
                 <p className="text-[1.6rem] font-semibold leading-none text-white">
-                  {historyEntries.length}
+                  {callsCount ?? "—"}
                 </p>
                 <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-white/42">
                   Appels

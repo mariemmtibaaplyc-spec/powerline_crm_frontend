@@ -329,6 +329,7 @@ export const workspaceApi = {
     pause_seconds:         number;
     total_seconds:         number;
     appointments_today:    number;
+    calls_today:           number;
   }> {
     const { data } = await apiClient.get(`/agent-statuses/${userId}/daily-stats`);
     return unwrap<any>(data);

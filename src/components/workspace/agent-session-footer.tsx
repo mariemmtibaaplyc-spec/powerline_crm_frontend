@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef } from "react";
 import { Activity, Clock3, Coffee, PauseCircle, TimerReset } from "lucide-react";
 import { useAgentWorkspaceState } from "@/components/workspace/agent-workspace-provider";
 import { cn } from "@/lib/utils";
 
-const POLL_INTERVAL_MS = 300_000; // 5 minutes
+const POLL_INTERVAL_MS = 300_000; // 5 minutes — documenté pour référence
 
 function formatFooterSyncTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString("fr-FR", {
@@ -22,56 +22,27 @@ function secondsToHms(seconds: number): string {
   return [h, m, sec].map((p) => String(p).padStart(2, "0")).join(":");
 }
 
-interface DailyStats {
-  communication_seconds: number;
-  qualification_seconds: number;
-  attente_seconds:       number;
-  pause_seconds:         number;
-  total_seconds:         number;
-  appointments_today:    number;
-}
-
 export function AgentSessionFooter() {
   const {
     agentStatus,
     currentStatusMeta,
+    dailyStatsCache,
     isPaused,
-    userId,
   } = useAgentWorkspaceState();
 
-  const [dailyStats, setDailyStats] = useState<DailyStats | null>(null);
-  const [lastSyncAt, setLastSyncAt] = useState("--:--");
-  const [syncError, setSyncError]   = useState(false);
+  // Le cache est mis à jour par AgentWorkspaceProvider (toujours monté).
+  // Le footer se contente de lire — plus aucun fetch local.
+  const cache = dailyStatsCache;
+  const lastSyncAt = cache ? formatFooterSyncTime(cache.lastSyncAt) : "--:--";
+  const syncError  = false; // le provider loggue les erreurs, le footer n'en sait rien
 
-  useEffect(() => {
-    if (!userId) return;
+  const totalAppointments = cache?.appointments_today ?? 0;
 
-    const fetchStats = async () => {
-      try {
-        const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
-        const stats = await workspaceApi.getDailyStats(userId);
-        setDailyStats(stats);
-        setLastSyncAt(formatFooterSyncTime(Date.now()));
-        setSyncError(false);
-      } catch {
-        setSyncError(true);
-      }
-    };
-
-    fetchStats();
-    const interval = window.setInterval(fetchStats, POLL_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, [userId]);
-
-  // RDV du jour — depuis daily-stats (même fuseau UTC que les 4 autres cartes)
-  const totalAppointments = dailyStats?.appointments_today ?? 0;
-
-  // Durées cumulées depuis le backend — figées entre deux polls
-  const cumComm  = dailyStats ? secondsToHms(dailyStats.communication_seconds) : "00:00:00";
-  const cumQual  = dailyStats ? secondsToHms(dailyStats.qualification_seconds) : "00:00:00";
-  const cumAtt   = dailyStats ? secondsToHms(dailyStats.attente_seconds)       : "00:00:00";
-  const cumPause = dailyStats ? secondsToHms(dailyStats.pause_seconds)         : "00:00:00";
-  const cumTotal = dailyStats ? secondsToHms(dailyStats.total_seconds)         : "00:00:00";
+  const cumComm  = cache ? secondsToHms(cache.communication_seconds) : "00:00:00";
+  const cumQual  = cache ? secondsToHms(cache.qualification_seconds) : "00:00:00";
+  const cumAtt   = cache ? secondsToHms(cache.attente_seconds)       : "00:00:00";
+  const cumPause = cache ? secondsToHms(cache.pause_seconds)         : "00:00:00";
+  const cumTotal = cache ? secondsToHms(cache.total_seconds)         : "00:00:00";
 
   const footerItems = useMemo(
     () => [
@@ -153,9 +124,7 @@ export function AgentSessionFooter() {
                 Footer production agent
               </p>
               <p className="mt-1 text-sm text-white/62">
-                {syncError
-                  ? "Erreur de synchronisation — derniere valeur connue affichee."
-                  : `Statistiques journalieres — mise a jour toutes les 5 minutes. Sync ${lastSyncAt}.`}
+                {`Statistiques journalieres — mise a jour toutes les 5 minutes. Sync ${lastSyncAt}.`}
               </p>
               <div className="mt-3 inline-flex items-center gap-2 rounded-[1rem] border border-white/10 bg-white/[0.05] px-3 py-2.5">
                 <div className="min-w-0">

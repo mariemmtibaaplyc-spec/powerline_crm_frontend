@@ -67,7 +67,8 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
   const authSession = useAuthStore((s) => s.session);
   const setSession  = useSessionStore((s) => s.setSession);
   const setAuthSession = useAuthStore((s) => s.setSession);
-  const initFromSession = useWorkspaceStore((s) => s.initFromSession);
+  const initFromSession    = useWorkspaceStore((s) => s.initFromSession);
+  const fetchDailyStats    = useWorkspaceStore((s) => s.fetchDailyStats);
   const initializedUserIdRef = useRef<number | null>(null);
 
   // Identifiant effectif : sessionStore en priorité, puis authStore (après refresh)
@@ -130,6 +131,12 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
       activeCampaignId: user?.activeCampaignId ?? null,
       activeCampaignName: user?.activeCampaignName ?? null,
     }).catch(console.error);
+
+    // Poll daily-stats toutes les 5 minutes depuis le provider (toujours monté),
+    // indépendamment de la page visitée. Alimente dailyStatsCache → sidebar + footer.
+    fetchDailyStats();
+    const statsInterval = window.setInterval(fetchDailyStats, 300_000);
+    return () => window.clearInterval(statsInterval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveUserId]);
 
@@ -165,6 +172,8 @@ export function useAgentWorkspaceState() {
     appointmentError: state.appointmentError,
     dismissAppointmentError: state.dismissAppointmentError,
     fetchAppointments: state.fetchAppointments,
+    fetchDailyStats: state.fetchDailyStats,
+    dailyStatsCache: state.dailyStatsCache,
     pauseAgent: () => state.setAgentStatus("paused" as AgentStatus),
     resumeAgent: state.resumeQueue,
     startReminderCall: state.openReminderCall,

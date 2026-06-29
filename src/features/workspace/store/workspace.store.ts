@@ -56,6 +56,19 @@ interface AgentWorkspaceStoreState {
 
   // ── State AJOUT Backend ───────────────────────────────────────────────────
   appointmentError: string | null; // null = pas d'erreur, string = message à afficher dans la modale
+  // Cache du dernier poll daily-stats — null avant le premier fetch.
+  // null → sidebar affiche "—" (placeholder neutre, pas "0").
+  // Contient toutes les statistiques journalières — utilisé par le footer ET la sidebar.
+  dailyStatsCache: {
+    communication_seconds: number;
+    qualification_seconds: number;
+    attente_seconds:       number;
+    pause_seconds:         number;
+    total_seconds:         number;
+    appointments_today:    number;
+    calls_today:           number;
+    lastSyncAt:            number;  // timestamp ms du dernier fetch réussi
+  } | null;
   userId: number | null;
   sipExtension: string | null;
   activeCampaignId: number | null;
@@ -91,6 +104,7 @@ interface AgentWorkspaceStoreState {
 
   fetchHistory: (date: string) => Promise<void>;
   fetchAppointments: (date?: string) => Promise<void>;
+  fetchDailyStats: () => Promise<void>;
   dismissAppointmentError: () => void;
 
   // ── Actions AJOUT Backend ─────────────────────────────────────────────────
@@ -124,6 +138,11 @@ function createInitialState() {
     sessionStartedAt: now,
     activeProspect: createUnknownManualCallProspect(""),
     // ── AJOUT Backend ───────────────────────────────────────────────────────
+    dailyStatsCache: null as {
+      communication_seconds: number; qualification_seconds: number;
+      attente_seconds: number; pause_seconds: number; total_seconds: number;
+      appointments_today: number; calls_today: number; lastSyncAt: number;
+    } | null,
     userId: null as number | null,
     sipExtension: null as string | null,
     activeCampaignId: null as number | null,
@@ -872,6 +891,29 @@ startPause: (pauseCode) => {
   },
 
   dismissAppointmentError: () => set({ appointmentError: null }),
+
+  fetchDailyStats: async () => {
+    const { userId } = useWorkspaceStore.getState();
+    if (!userId) return;
+    try {
+      const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+      const stats = await workspaceApi.getDailyStats(userId);
+      set({
+        dailyStatsCache: {
+          communication_seconds: stats.communication_seconds,
+          qualification_seconds: stats.qualification_seconds,
+          attente_seconds:       stats.attente_seconds,
+          pause_seconds:         stats.pause_seconds,
+          total_seconds:         stats.total_seconds,
+          appointments_today:    stats.appointments_today,
+          calls_today:           stats.calls_today,
+          lastSyncAt:            Date.now(),
+        },
+      });
+    } catch (err) {
+      console.error("[fetchDailyStats] failed:", err);
+    }
+  },
 
   setAgentStatusFromWS: (status) =>
   set((state) => {
