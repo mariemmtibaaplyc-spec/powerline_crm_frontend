@@ -23,12 +23,17 @@ function formatDisplayDate(value: string) {
 }
 
 export default function Page() {
-  const { appointments, latestAppointmentFocusDate } = useAgentWorkspaceState();
+  const { appointments, fetchAppointments, latestAppointmentFocusDate } = useAgentWorkspaceState();
   const today = formatInputDate(new Date());
   const [selectedDate, setSelectedDate] = useState(
     latestAppointmentFocusDate ?? today,
   );
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Charger les appointments depuis le backend au montage et au changement de date
+  useEffect(() => {
+    fetchAppointments(selectedDate);
+  }, [selectedDate, fetchAppointments]);
 
   useEffect(() => {
     setCurrentPage(1);

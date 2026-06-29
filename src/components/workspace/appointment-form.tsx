@@ -35,7 +35,9 @@ function createDefaultReminderDateTime() {
 export function AppointmentForm() {
   const {
     activeProspect,
+    appointmentError,
     cancelReminderForm,
+    dismissAppointmentError,
     pendingQualificationNextStatus,
     reminderFormOpen,
     submitReminderQualification,
@@ -148,34 +150,57 @@ export function AppointmentForm() {
             />
           </label>
 
+          {appointmentError && (
+            <div className="rounded-[1.15rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {appointmentError}
+            </div>
+          )}
+
           <div className="flex flex-col gap-3 border-t border-[#e3ebf4] pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[#607287]">
-              Le rappel ne sera cree qu'apres validation complete du formulaire.
+              {appointmentError
+                ? "Choisissez de reessayer ou de continuer sans rappel."
+                : "Le rappel ne sera cree qu'apres validation complete du formulaire."}
             </p>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={cancelReminderForm}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-[#dce6f0] bg-white px-5 text-sm font-semibold text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:bg-[#f8fbff]"
-              >
-                Retour
-              </button>
-              <button
-                type="button"
-                disabled={!canSubmit}
-                onClick={() =>
-                  submitReminderQualification({
-                    date,
-                    time,
-                    note,
-                  })
-                }
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,#f0b57d_0%,#d99154_100%)] px-5 text-sm font-semibold text-[#1a2533] shadow-[0_18px_36px_rgba(217,145,84,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
-              >
-                Valider le rappel
-                <ArrowRight className="h-4 w-4" />
-              </button>
+              {appointmentError ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={dismissAppointmentError}
+                    className="inline-flex h-12 items-center justify-center rounded-full border border-[#dce6f0] bg-white px-5 text-sm font-semibold text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:bg-[#f8fbff]"
+                  >
+                    Reessayer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelReminderForm}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 px-5 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                  >
+                    Continuer sans rappel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={cancelReminderForm}
+                    className="inline-flex h-12 items-center justify-center rounded-full border border-[#dce6f0] bg-white px-5 text-sm font-semibold text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:bg-[#f8fbff]"
+                  >
+                    Retour
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSubmit}
+                    onClick={() => submitReminderQualification({ date, time, note })}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,#f0b57d_0%,#d99154_100%)] px-5 text-sm font-semibold text-[#1a2533] shadow-[0_18px_36px_rgba(217,145,84,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                  >
+                    Valider le rappel
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

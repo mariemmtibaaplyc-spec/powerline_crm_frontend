@@ -1,7 +1,7 @@
 // src/features/workspace/api/workspace.api.ts
 
 import { apiClient } from "@/lib/axios";
-import type { HistoryEntry } from "@/types/workspace.types";
+import type { AppointmentEntry, HistoryEntry } from "@/types/workspace.types";
 import { createUnknownManualCallProspect } from "@/features/workspace/mocks/prospects.mock";
 
 // ─── Types réponse ────────────────────────────────────────────────────────────
@@ -43,6 +43,9 @@ export interface EndCallResponse {
     scheduled_at: string;
     status: string;
   };
+  // snake_case — cohérent avec les autres champs de la réponse backend.
+  // Distinct de appointmentError (camelCase) qui est l'état interne du store.
+  appointment_error?: true;
 }
 
 export interface BackendQualification {
@@ -64,6 +67,44 @@ export interface ContactSearchResult {
   postal_code?: string | null;
   city?: string | null;
   custom_fields?: Record<string, any> | null;
+}
+
+// ─── Agent appointments mapping ───────────────────────────────────────────────
+
+function mapBackendAppointmentToEntry(appt: any): AppointmentEntry {
+  const scheduled = new Date(appt.scheduled_at);
+  const contact = appt.contact as ContactSearchResult | null | undefined;
+  const clientName = contact
+    ? `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim() || contact.phone
+    : "";
+
+  return {
+    id:         String(appt.id),
+    date:       appt.scheduled_at.slice(0, 10),
+    time:       scheduled.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+    clientName,
+    phone:      contact?.phone ?? "",
+    campaign:   appt.campaign?.name ?? "",
+    queue:      "",
+    note:       appt.notes ?? "",
+    prospect:   contact
+      ? {
+          id:            String(contact.id),
+          firstName:     contact.first_name  ?? "",
+          lastName:      contact.last_name   ?? "",
+          phone:         contact.phone       ?? "",
+          phoneSecondary: contact.phone2     ?? "",
+          email:         contact.email       ?? "",
+          address:       contact.address     ?? "",
+          postalCode:    contact.postal_code ?? "",
+          city:          contact.city        ?? "",
+          comments:
+            typeof contact.custom_fields?.commentaires === "string"
+              ? contact.custom_fields.commentaires
+              : "",
+        }
+      : createUnknownManualCallProspect(""),
+  };
 }
 
 // ─── Agent history mapping ────────────────────────────────────────────────────
@@ -248,6 +289,22 @@ export const workspaceApi = {
     });
     const payload = unwrap<any>(data);
     return Array.isArray(payload) ? payload : (payload?.items ?? payload?.data ?? []);
+  },
+
+  // ── Agent appointments ───────────────────────────────────────────────────────
+
+  async getAgentAppointments(agentId: number, date: string): Promise<AppointmentEntry[]> {
+    // `to` = fin de journée via le lendemain à minuit (le backend fait lte: to).
+    // `from=date&to=next_day` couvre toute la journée calendaire.
+    const nextDay = new Date(`${date}T00:00:00.000Z`);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    const toDate = nextDay.toISOString().slice(0, 10);
+    const { data } = await apiClient.get("/appointments", {
+      params: { agent_id: agentId, from: date, to: toDate, limit: 50 },
+    });
+    const payload = unwrap<any>(data);
+    const rows: any[] = Array.isArray(payload) ? payload : (payload?.data ?? []);
+    return rows.map(mapBackendAppointmentToEntry);
   },
 
   // ── Agent call history ───────────────────────────────────────────────────────

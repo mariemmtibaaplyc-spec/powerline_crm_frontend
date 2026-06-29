@@ -56,6 +56,7 @@ interface AgentWorkspaceStoreState {
   historyEntries: HistoryEntry[];
 
   // ── State AJOUT Backend ───────────────────────────────────────────────────
+  appointmentError: string | null; // null = pas d'erreur, string = message à afficher dans la modale
   userId: number | null;
   sipExtension: string | null;
   activeCampaignId: number | null;
@@ -90,6 +91,8 @@ interface AgentWorkspaceStoreState {
   markAgentHungUp: () => void;
 
   fetchHistory: (date: string) => Promise<void>;
+  fetchAppointments: (date: string) => Promise<void>;
+  dismissAppointmentError: () => void;
 
   // ── Actions AJOUT Backend ─────────────────────────────────────────────────
   initFromSession: (params: {
@@ -130,6 +133,7 @@ function createInitialState() {
     endingCallId: null as number | null,
     isStatusMutationPending: false,
     pendingAgentStatusTarget: null as "AVAILABLE" | "PAUSED" | "OFFLINE" | null,
+    appointmentError: null as string | null,
     backendQualifications: [] as BackendQualification[],
     selectedQualificationId: null as number | null,
     selectedQualificationMeta: null as BackendQualification | null,
@@ -490,6 +494,7 @@ startPause: (pauseCode) => {
 
   if (callId) {
     const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+    let appointmentFailed = false;
     try {
       const response = await workspaceApi.endCall(callId, {
         qualification_id: selectedQualificationId ?? undefined,
@@ -499,31 +504,21 @@ startPause: (pauseCode) => {
         },
       });
 
-      // Incrémenter compteur RDV si appointment créé
-      if (response.appointment) {
-        useWorkspaceStore.setState((state) => ({
-          appointments: [
-            ...state.appointments,
-            {
-              id: String(response.appointment!.id),
-              date: values.date,
-              time: values.time,
-              clientName: `${state.activeProspect.firstName} ${state.activeProspect.lastName}`.trim(),
-              phone: state.activeProspect.phone,
-              campaign: state.callSession.campaign ?? "",
-              queue: state.callSession.queue ?? "",
-              note: values.note,
-              prospect: state.activeProspect,
-            },
-          ],
-        }));
+      if (response.appointment_error) {
+        appointmentFailed = true;
+        set({ appointmentError: "Le rappel n'a pas pu être créé. Vérifiez que l'appel est associé à un contact, ou continuez sans rappel." });
+      } else if (response.appointment) {
+        useWorkspaceStore.getState().fetchAppointments(values.date).catch(() => {});
       }
     } catch (err) {
       console.error("[submitReminderQualification] endCall failed:", err);
+      appointmentFailed = true;
+      set({ appointmentError: "Le rappel n'a pas pu être créé. Vérifiez les informations de l'appel." });
     }
 
+    if (appointmentFailed) return;
+
     if (userId) {
-      const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
       if (nextStatus === "paused") {
         workspaceApi.setPaused(userId).catch(console.error);
       } else {
@@ -541,6 +536,7 @@ startPause: (pauseCode) => {
     qualificationPanelOpen: false,
     reminderFormOpen: false,
     appointmentFormOpen: false,
+    appointmentError: null,
     selectedQualification: null,
     selectedQualificationId: null,
     selectedQualificationMeta: null,
@@ -575,6 +571,7 @@ startPause: (pauseCode) => {
 
   if (callId) {
     const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+    let appointmentFailed = false;
     try {
       const response = await workspaceApi.endCall(callId, {
         qualification_id: selectedQualificationId ?? undefined,
@@ -584,31 +581,24 @@ startPause: (pauseCode) => {
         },
       });
 
-      // Incrémenter compteur RDV si appointment créé
-      if (response.appointment) {
-        useWorkspaceStore.setState((state) => ({
-          appointments: [
-            ...state.appointments,
-            {
-              id: String(response.appointment!.id),
-              date: values.date,
-              time: values.time,
-              clientName: `${state.activeProspect.firstName} ${state.activeProspect.lastName}`.trim(),
-              phone: state.activeProspect.phone,
-              campaign: state.callSession.campaign ?? "",
-              queue: state.callSession.queue ?? "",
-              note: values.note,
-              prospect: state.activeProspect,
-            },
-          ],
-        }));
+      if (response.appointment_error) {
+        // Backend a logué la cause réelle — on affiche un message générique
+        appointmentFailed = true;
+        set({ appointmentError: "Le RDV n'a pas pu être créé. Vérifiez que l'appel est associé à un contact, ou continuez sans RDV." });
+      } else if (response.appointment) {
+        // RDV créé avec succès — refetch la liste depuis le backend (données exactes)
+        useWorkspaceStore.getState().fetchAppointments(values.date).catch(() => {});
       }
     } catch (err) {
       console.error("[submitAppointmentQualification] endCall failed:", err);
+      appointmentFailed = true;
+      set({ appointmentError: "Le RDV n'a pas pu être créé. Vérifiez les informations de l'appel." });
     }
 
+    // Si le RDV a échoué, garder la modale ouverte pour que l'agent voie l'erreur
+    if (appointmentFailed) return;
+
     if (userId) {
-      const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
       if (nextStatus === "paused") {
         workspaceApi.setPaused(userId).catch(console.error);
       } else {
@@ -626,6 +616,7 @@ startPause: (pauseCode) => {
     qualificationPanelOpen: false,
     reminderFormOpen: false,
     appointmentFormOpen: false,
+    appointmentError: null,
     selectedQualification: null,
     selectedQualificationId: null,
     selectedQualificationMeta: null,
@@ -869,6 +860,20 @@ startPause: (pauseCode) => {
       console.error("[fetchHistory] failed:", err);
     }
   },
+
+  fetchAppointments: async (date) => {
+    const { userId } = useWorkspaceStore.getState();
+    if (!userId) return;
+    try {
+      const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+      const entries = await workspaceApi.getAgentAppointments(userId, date);
+      set({ appointments: entries });
+    } catch (err) {
+      console.error("[fetchAppointments] failed:", err);
+    }
+  },
+
+  dismissAppointmentError: () => set({ appointmentError: null }),
 
   setAgentStatusFromWS: (status) =>
   set((state) => {
