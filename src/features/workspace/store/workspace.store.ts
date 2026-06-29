@@ -47,7 +47,6 @@ interface AgentWorkspaceStoreState {
   reminderFormOpen: boolean;
   appointmentFormOpen: boolean;
   latestReminderFocusDate: string | null;
-  latestAppointmentFocusDate: string | null;
   selectedQualification: QualificationCode | null;
   lastQualification: QualificationRecord | null;
   pendingQualificationNextStatus: "paused" | "waiting" | null;
@@ -157,7 +156,6 @@ function createInitialState() {
     reminderFormOpen: false,
     appointmentFormOpen: false,
     latestReminderFocusDate: null as string | null,
-    latestAppointmentFocusDate: null as string | null,
     selectedQualification: null as QualificationCode | null,
     lastQualification: null as QualificationRecord | null,
     pendingQualificationNextStatus: null as "paused" | "waiting" | null,

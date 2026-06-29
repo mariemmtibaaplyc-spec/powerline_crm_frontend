@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck2, CalendarDays, RotateCcw } from "lucide-react";
+import { CalendarCheck2, RefreshCw } from "lucide-react";
 import {
   MeetingsTable,
   type AgentAppointmentItem,
@@ -12,7 +12,10 @@ import { useAgentWorkspaceState } from "@/components/workspace/agent-workspace-p
 import { formatInputDate } from "@/features/workspace/mocks/mock.utils";
 
 const PAGE_SIZE = 10;
+const REFRESH_INTERVAL_MS = 300_000; // 5 minutes — cohérent avec le footer
 
+// Garde défensive conservée : la fonction peut être réutilisée avec un value null
+// sans risquer un crash RangeError (new Date("nullT00:00:00")).
 function formatDisplayDate(value: string | null): string {
   if (!value) return "Tous les rendez-vous";
   return new Intl.DateTimeFormat("fr-TN", {
@@ -24,99 +27,52 @@ function formatDisplayDate(value: string | null): string {
 }
 
 export default function Page() {
-  const { appointments, fetchAppointments, latestAppointmentFocusDate } = useAgentWorkspaceState();
+  const { appointments, fetchAppointments } = useAgentWorkspaceState();
   const today = formatInputDate(new Date());
-  // null = aucun filtre (tous les RDV) ; chaîne YYYY-MM-DD = filtre par date
-  const [selectedDate, setSelectedDate] = useState<string | null>(
-    latestAppointmentFocusDate ?? null,
-  );
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Chargement initial et au changement de filtre de date
+  // Chargement au montage + rafraîchissement automatique toutes les 5 minutes
   useEffect(() => {
-    fetchAppointments(selectedDate ?? undefined);
+    fetchAppointments(today);
+    const interval = window.setInterval(() => fetchAppointments(today), REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate]);
+  }, []);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedDate]);
+  // Les appointments chargés par fetchAppointments(today) sont déjà filtrés
+  // côté API par scheduled_at = today — tri local par heure uniquement
+  const sorted = useMemo(() =>
+    [...appointments].sort((a, b) => a.time.localeCompare(b.time)),
+    [appointments]
+  );
 
-  useEffect(() => {
-    if (!latestAppointmentFocusDate) return;
-    setSelectedDate(latestAppointmentFocusDate);
-  }, [latestAppointmentFocusDate]);
-
-  // Filtre local par date si un filtre est actif
-  const filteredAppointments = useMemo(() => {
-    const base = selectedDate
-      ? appointments.filter((a) => a.date === selectedDate)
-      : appointments;
-    return [...base].sort((left, right) => {
-      if (left.date !== right.date) return left.date.localeCompare(right.date);
-      return left.time.localeCompare(right.time);
-    });
-  }, [appointments, selectedDate]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredAppointments.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const paginatedAppointments = useMemo(() => {
     const start = (safeCurrentPage - 1) * PAGE_SIZE;
-    return filteredAppointments.slice(start, start + PAGE_SIZE);
-  }, [filteredAppointments, safeCurrentPage]);
-
-  const selectionNote =
-    selectedDate === null
-      ? "Affichage de tous les rendez-vous de l'agent, toutes dates confondues."
-      : selectedDate === today
-        ? "Affichage centre sur les rendez-vous du jour."
-        : selectedDate < today
-          ? `Affichage cumule du ${formatDisplayDate(selectedDate)} jusqu'a aujourd'hui.`
-          : `Affichage des rendez-vous planifies pour le ${formatDisplayDate(selectedDate)}.`;
+    return sorted.slice(start, start + PAGE_SIZE);
+  }, [sorted, safeCurrentPage]);
 
   return (
     <section className="space-y-6">
       <PageHeader
         eyebrow="Agent workspace"
         title="Rendez-vous"
-        description="Lecture simple des rendez-vous qualifies par l'agent depuis le workspace de production."
+        description="Rendez-vous planifies pour aujourd'hui — mis a jour toutes les 5 minutes."
         actions={
           <>
-            <div className="inline-flex min-h-[72px] items-center gap-3 rounded-[1.25rem] border border-[#dce6f0] bg-white px-4 py-3 shadow-[0_10px_24px_rgba(20,32,53,0.06)]">
-              <CalendarDays className="h-4 w-4 text-[#5d7690]" />
-              <div className="space-y-1">
-                <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6c7f93]">
-                  Date
-                </p>
-                <input
-                  type="date"
-                  value={selectedDate ?? ""}
-                  onChange={(event) => setSelectedDate(event.target.value || null)}
-                  className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-[#102033] outline-none"
-                />
-              </div>
-            </div>
-
             <span className="inline-flex min-h-[72px] items-center gap-2 rounded-[1.25rem] border border-[#dce6f0] bg-white px-4 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)]">
               <CalendarCheck2 className="h-4 w-4 text-[#5d7690]" />
-              {filteredAppointments.length} RDV affiches
+              {sorted.length} RDV affiches
             </span>
 
             <button
               type="button"
-              onClick={() => setSelectedDate(today)}
+              onClick={() => fetchAppointments(today)}
               className="inline-flex min-h-[72px] items-center gap-2 rounded-[1.25rem] border border-[#dce6f0] bg-white px-4 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:-translate-y-0.5 hover:border-[#c9d8e7] hover:bg-[#f8fbff]"
             >
-              <CalendarDays className="h-4 w-4" />
-              Aujourd'hui
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedDate(null)}
-              className="inline-flex min-h-[72px] items-center gap-2 rounded-[1.25rem] border border-[#dce6f0] bg-white px-4 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:-translate-y-0.5 hover:border-[#c9d8e7] hover:bg-[#f8fbff]"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Tous
+              <RefreshCw className="h-4 w-4" />
+              Actualiser
             </button>
           </>
         }
@@ -124,10 +80,10 @@ export default function Page() {
 
       <div className="flex flex-wrap items-center gap-3 rounded-[1.4rem] border border-[#dce6f0] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-4 py-3 text-sm text-[#607287] shadow-[0_12px_28px_rgba(20,32,53,0.05)]">
         <span className="font-medium text-[#102033]">
-          {selectedDate ? `Vue du ${formatDisplayDate(selectedDate)}` : "Tous les rendez-vous"}
+          Vue du {formatDisplayDate(today)}
         </span>
         <span className="h-1 w-1 rounded-full bg-[#8aa2bc]" />
-        <span>{selectionNote}</span>
+        <span>Affichage centre sur les rendez-vous du jour.</span>
       </div>
 
       <MeetingsTable
