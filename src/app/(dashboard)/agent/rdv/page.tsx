@@ -25,49 +25,37 @@ function formatDisplayDate(value: string) {
 export default function Page() {
   const { appointments, fetchAppointments, latestAppointmentFocusDate } = useAgentWorkspaceState();
   const today = formatInputDate(new Date());
-  const [selectedDate, setSelectedDate] = useState(
-    latestAppointmentFocusDate ?? today,
+  // null = aucun filtre (tous les RDV) ; chaîne YYYY-MM-DD = filtre par date
+  const [selectedDate, setSelectedDate] = useState<string | null>(
+    latestAppointmentFocusDate ?? null,
   );
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Charger les appointments depuis le backend au montage et au changement de date
+  // Chargement initial et au changement de filtre de date
   useEffect(() => {
-    fetchAppointments(selectedDate);
-  }, [selectedDate, fetchAppointments]);
+    fetchAppointments(selectedDate ?? undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedDate]);
 
   useEffect(() => {
-    if (!latestAppointmentFocusDate) {
-      return;
-    }
-
+    if (!latestAppointmentFocusDate) return;
     setSelectedDate(latestAppointmentFocusDate);
   }, [latestAppointmentFocusDate]);
 
+  // Filtre local par date si un filtre est actif
   const filteredAppointments = useMemo(() => {
-    return appointments
-      .filter((appointment) => {
-        if (selectedDate === today) {
-          return appointment.date === today;
-        }
-
-        if (selectedDate < today) {
-          return appointment.date >= selectedDate && appointment.date <= today;
-        }
-
-        return appointment.date === selectedDate;
-      })
-      .sort((left, right) => {
-        if (left.date !== right.date) {
-          return left.date.localeCompare(right.date);
-        }
-
-        return left.time.localeCompare(right.time);
-      });
-  }, [appointments, selectedDate, today]);
+    const base = selectedDate
+      ? appointments.filter((a) => a.date === selectedDate)
+      : appointments;
+    return [...base].sort((left, right) => {
+      if (left.date !== right.date) return left.date.localeCompare(right.date);
+      return left.time.localeCompare(right.time);
+    });
+  }, [appointments, selectedDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAppointments.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -99,8 +87,8 @@ export default function Page() {
                 </p>
                 <input
                   type="date"
-                  value={selectedDate}
-                  onChange={(event) => setSelectedDate(event.target.value)}
+                  value={selectedDate ?? ""}
+                  onChange={(event) => setSelectedDate(event.target.value || null)}
                   className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-[#102033] outline-none"
                 />
               </div>
@@ -116,8 +104,16 @@ export default function Page() {
               onClick={() => setSelectedDate(today)}
               className="inline-flex min-h-[72px] items-center gap-2 rounded-[1.25rem] border border-[#dce6f0] bg-white px-4 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:-translate-y-0.5 hover:border-[#c9d8e7] hover:bg-[#f8fbff]"
             >
-              <RotateCcw className="h-4 w-4" />
+              <CalendarDays className="h-4 w-4" />
               Aujourd'hui
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(null)}
+              className="inline-flex min-h-[72px] items-center gap-2 rounded-[1.25rem] border border-[#dce6f0] bg-white px-4 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:-translate-y-0.5 hover:border-[#c9d8e7] hover:bg-[#f8fbff]"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Tous
             </button>
           </>
         }

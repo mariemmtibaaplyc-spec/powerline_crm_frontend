@@ -33,7 +33,6 @@ interface DailyStats {
 export function AgentSessionFooter() {
   const {
     agentStatus,
-    appointments,
     currentStatusMeta,
     isPaused,
     userId,
@@ -63,7 +62,8 @@ export function AgentSessionFooter() {
     return () => window.clearInterval(interval);
   }, [userId]);
 
-  const totalAppointments = appointments.length;
+  // RDV du jour — depuis daily-stats (même fuseau UTC que les 4 autres cartes)
+  const totalAppointments = dailyStats?.appointments_today ?? 0;
 
   // Durées cumulées depuis le backend — figées entre deux polls
   const cumComm  = dailyStats ? secondsToHms(dailyStats.communication_seconds) : "00:00:00";
@@ -156,18 +156,15 @@ export function AgentSessionFooter() {
                   ? "Erreur de synchronisation — derniere valeur connue affichee."
                   : `Statistiques journalieres — mise a jour toutes les 5 minutes. Sync ${lastSyncAt}.`}
               </p>
-              <div className="mt-3 inline-flex items-center gap-3 rounded-[1rem] border border-white/10 bg-white/[0.05] px-3 py-2.5">
+              <div className="mt-3 inline-flex items-center gap-2 rounded-[1rem] border border-white/10 bg-white/[0.05] px-3 py-2.5">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/42">
-                    RDV totaux
+                    RDV aujourd'hui
                   </p>
                   <p className="mt-1 text-lg font-semibold text-white">
                     {totalAppointments}
                   </p>
                 </div>
-                <span className="rounded-full bg-[#effbf5] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#15795d]">
-                  Store live
-                </span>
               </div>
             </div>
             <div

@@ -91,7 +91,7 @@ interface AgentWorkspaceStoreState {
   markAgentHungUp: () => void;
 
   fetchHistory: (date: string) => Promise<void>;
-  fetchAppointments: (date: string) => Promise<void>;
+  fetchAppointments: (date?: string) => Promise<void>;
   dismissAppointmentError: () => void;
 
   // ── Actions AJOUT Backend ─────────────────────────────────────────────────
@@ -861,7 +861,7 @@ startPause: (pauseCode) => {
     }
   },
 
-  fetchAppointments: async (date) => {
+  fetchAppointments: async (date?) => {
     const { userId } = useWorkspaceStore.getState();
     if (!userId) return;
     try {

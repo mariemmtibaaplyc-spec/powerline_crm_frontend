@@ -293,15 +293,17 @@ export const workspaceApi = {
 
   // ── Agent appointments ───────────────────────────────────────────────────────
 
-  async getAgentAppointments(agentId: number, date: string): Promise<AppointmentEntry[]> {
-    // `to` = fin de journée via le lendemain à minuit (le backend fait lte: to).
-    // `from=date&to=next_day` couvre toute la journée calendaire.
-    const nextDay = new Date(`${date}T00:00:00.000Z`);
-    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-    const toDate = nextDay.toISOString().slice(0, 10);
-    const { data } = await apiClient.get("/appointments", {
-      params: { agent_id: agentId, from: date, to: toDate, limit: 50 },
-    });
+  async getAgentAppointments(agentId: number, date?: string): Promise<AppointmentEntry[]> {
+    // Sans date → tous les RDV de l'agent (page RDV sans filtre)
+    // Avec date → `to` = lendemain UTC pour couvrir toute la journée calendaire
+    const params: Record<string, string | number> = { agent_id: agentId, limit: 200 };
+    if (date) {
+      const nextDay = new Date(`${date}T00:00:00.000Z`);
+      nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+      params.from = date;
+      params.to   = nextDay.toISOString().slice(0, 10);
+    }
+    const { data } = await apiClient.get("/appointments", { params });
     const payload = unwrap<any>(data);
     const rows: any[] = Array.isArray(payload) ? payload : (payload?.data ?? []);
     return rows.map(mapBackendAppointmentToEntry);
@@ -326,6 +328,7 @@ export const workspaceApi = {
     attente_seconds:       number;
     pause_seconds:         number;
     total_seconds:         number;
+    appointments_today:    number;
   }> {
     const { data } = await apiClient.get(`/agent-statuses/${userId}/daily-stats`);
     return unwrap<any>(data);
