@@ -76,14 +76,14 @@ function mapBackendAppointmentToEntry(appt: any): AppointmentEntry {
   const contact = appt.contact as ContactSearchResult | null | undefined;
   const clientName = contact
     ? `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim() || contact.phone
-    : "";
+    : (appt.phone_number ?? "");
 
   return {
     id:         String(appt.id),
     date:       appt.scheduled_at.slice(0, 10),
     time:       scheduled.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
     clientName,
-    phone:      contact?.phone ?? "",
+    phone:      contact?.phone ?? appt.phone_number ?? "",
     campaign:   appt.campaign?.name ?? "",
     queue:      "",
     note:       appt.notes ?? "",

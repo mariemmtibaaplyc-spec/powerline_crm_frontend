@@ -177,22 +177,13 @@ export function QualificationForm() {
 
             <div className="flex flex-col gap-3 sm:flex-row">
               {appointmentError ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={dismissAppointmentError}
-                    className="inline-flex h-12 items-center justify-center rounded-full border border-[#dce6f0] bg-white px-5 text-sm font-semibold text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:bg-[#f8fbff]"
-                  >
-                    Reessayer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelAppointmentForm}
-                    className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 px-5 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-                  >
-                    Continuer sans RDV
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={dismissAppointmentError}
+                  className="inline-flex h-12 items-center justify-center rounded-full border border-[#dce6f0] bg-white px-5 text-sm font-semibold text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:bg-[#f8fbff]"
+                >
+                  Reessayer
+                </button>
               ) : (
                 <>
                   <button
