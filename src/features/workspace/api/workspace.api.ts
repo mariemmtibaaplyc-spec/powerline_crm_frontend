@@ -1,7 +1,7 @@
 // src/features/workspace/api/workspace.api.ts
 
 import { apiClient } from "@/lib/axios";
-import type { AppointmentEntry, HistoryEntry } from "@/types/workspace.types";
+import type { AppointmentEntry, HistoryEntry, HistoryStatus, ProspectSheet } from "@/types/workspace.types";
 import { createUnknownManualCallProspect } from "@/features/workspace/mocks/prospects.mock";
 
 // ─── Types réponse ────────────────────────────────────────────────────────────

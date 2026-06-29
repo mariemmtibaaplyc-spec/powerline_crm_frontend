@@ -13,7 +13,8 @@ import { formatInputDate } from "@/features/workspace/mocks/mock.utils";
 
 const PAGE_SIZE = 10;
 
-function formatDisplayDate(value: string) {
+function formatDisplayDate(value: string | null): string {
+  if (!value) return "Tous les rendez-vous";
   return new Intl.DateTimeFormat("fr-TN", {
     weekday: "long",
     day: "numeric",
@@ -65,11 +66,13 @@ export default function Page() {
   }, [filteredAppointments, safeCurrentPage]);
 
   const selectionNote =
-    selectedDate === today
-      ? "Affichage centre sur les rendez-vous du jour."
-      : selectedDate < today
-        ? `Affichage cumule du ${formatDisplayDate(selectedDate)} jusqu'a aujourd'hui.`
-        : `Affichage des rendez-vous planifies pour le ${formatDisplayDate(selectedDate)}.`;
+    selectedDate === null
+      ? "Affichage de tous les rendez-vous de l'agent, toutes dates confondues."
+      : selectedDate === today
+        ? "Affichage centre sur les rendez-vous du jour."
+        : selectedDate < today
+          ? `Affichage cumule du ${formatDisplayDate(selectedDate)} jusqu'a aujourd'hui.`
+          : `Affichage des rendez-vous planifies pour le ${formatDisplayDate(selectedDate)}.`;
 
   return (
     <section className="space-y-6">
@@ -121,7 +124,7 @@ export default function Page() {
 
       <div className="flex flex-wrap items-center gap-3 rounded-[1.4rem] border border-[#dce6f0] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-4 py-3 text-sm text-[#607287] shadow-[0_12px_28px_rgba(20,32,53,0.05)]">
         <span className="font-medium text-[#102033]">
-          Vue du {formatDisplayDate(selectedDate)}
+          {selectedDate ? `Vue du ${formatDisplayDate(selectedDate)}` : "Tous les rendez-vous"}
         </span>
         <span className="h-1 w-1 rounded-full bg-[#8aa2bc]" />
         <span>{selectionNote}</span>

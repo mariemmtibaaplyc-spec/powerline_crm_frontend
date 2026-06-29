@@ -28,6 +28,7 @@ interface DailyStats {
   attente_seconds:       number;
   pause_seconds:         number;
   total_seconds:         number;
+  appointments_today:    number;
 }
 
 export function AgentSessionFooter() {
