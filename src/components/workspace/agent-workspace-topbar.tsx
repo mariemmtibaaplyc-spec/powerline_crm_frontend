@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCircle2, Coffee, LogOut, Mic, MicOff, PauseCircle } from "lucide-react";
-import { RolePreviewSwitcher } from "@/components/layout/role-preview-switcher";
+import { authClient } from "@/lib/better-auth.client";
 import { cn } from "@/lib/utils";
 import {
   formatAgentElapsedTime,
@@ -65,12 +65,13 @@ export function AgentWorkspaceTopbar() {
     setPauseMenuOpen(false);
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    destroyAllSockets();
+    await authClient.signOut();
     setAuthSession(null);
     clearSession();
-    destroyAllSockets();
-    document.cookie =
-      "powerline_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
     router.replace("/login");
   }
 
@@ -114,8 +115,6 @@ export function AgentWorkspaceTopbar() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <RolePreviewSwitcher tone="dark" compact />
-
             <button
               type="button"
               onClick={() => setMicEnabled((value) => !value)}

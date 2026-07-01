@@ -39,8 +39,10 @@ apiClient.interceptors.response.use(
       useAuthStore.getState().setSession(null);
       window.localStorage.removeItem("accessToken");
       window.localStorage.removeItem("refreshToken");
-      document.cookie =
-        "powerline_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      // Expire both the legacy and better-auth session cookies
+      const expired = "; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      document.cookie = "powerline_session=" + expired;
+      document.cookie = "better-auth.session_token=" + expired;
     }
 
     return Promise.reject(error);

@@ -14,6 +14,7 @@ import {
   Headphones,
   LayoutDashboard,
   List,
+  LogOut,
   Megaphone,
   Settings,
   ShieldCheck,
@@ -24,6 +25,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/features/auth/store/auth.store";
+import { useLogout } from "@/features/auth/hooks/use-logout";
 import { useWorkspaceStore } from "@/features/workspace/store/workspace.store";
 import { cn } from "@/lib/utils";
 import { useSessionStore } from "@/store/session.store";
@@ -196,11 +198,14 @@ function getWorkspaceMeta(
   sessionUser?: {
     firstName?: string;
     lastName?: string;
+    email?: string;
     sip_extension?: string | null;
   } | null,
 ): WorkspaceMeta {
   const fullName =
-    `${sessionUser?.firstName ?? ""} ${sessionUser?.lastName ?? ""}`.trim() || "Agent connecte";
+    `${sessionUser?.firstName ?? ""} ${sessionUser?.lastName ?? ""}`.trim() ||
+    sessionUser?.email ||
+    "Utilisateur";
   const extensionLabel = sessionUser?.sip_extension
     ? `Ext ${sessionUser.sip_extension}`
     : "Extension SIP non configuree";
@@ -208,7 +213,7 @@ function getWorkspaceMeta(
   if (pathname.startsWith("/admin")) {
     return {
       title: "Admin Control",
-      user: "root admin",
+      user: fullName,
       role: "Pilotage global",
       status: "12 modules actifs",
       note: "Configuration, imports et administration globale CRM.",
@@ -220,7 +225,7 @@ function getWorkspaceMeta(
   if (pathname.startsWith("/supervisor")) {
     return {
       title: "Supervisor Desk",
-      user: "sup sup",
+      user: fullName,
       role: "Superviseurs",
       status: "Session active",
       note: "Base stable pour la supervision temps reel.",
@@ -243,7 +248,7 @@ function getWorkspaceMeta(
 
   return {
     title: "Powerline Hub",
-    user: "workspace",
+    user: fullName,
     role: "Navigation transverse",
     status: "Preview",
     note: "Bascule entre les workspaces CRM disponibles.",
@@ -257,6 +262,7 @@ export function Sidebar() {
   const session = useSessionStore((state) => state.session);
   const authSession = useAuthStore((state) => state.session);
   const dailyStatsCache = useWorkspaceStore((state) => state.dailyStatsCache);
+  const logout = useLogout();
   // null avant le premier poll → affiche "—" (pas "0" trompeur)
   const rdvCount   = dailyStatsCache?.appointments_today ?? null;
   const callsCount = dailyStatsCache?.calls_today        ?? null;
@@ -497,25 +503,39 @@ export function Sidebar() {
             </div>
           </div>
         ) : (
-          <div className="mt-6 rounded-[1.4rem] border border-white/10 bg-white/6 p-4">
-            <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-white/38">
-              Monitoring systeme
-            </p>
-            <div className="mt-3 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">
-                  {pathname.startsWith("/admin")
-                    ? "Administration CRM"
-                    : pathname.startsWith("/supervisor")
-                      ? "Telephonie et CRM"
-                      : "Navigation workspace"}
-                </p>
-                <p className="mt-1 text-sm text-white/48">{workspace.note}</p>
-              </div>
-              <div className="rounded-full bg-emerald-400/12 px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200">
-                OK
+          <div className="mt-6 space-y-3">
+            <div className="rounded-[1.4rem] border border-white/10 bg-white/6 p-4">
+              <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-white/38">
+                Monitoring systeme
+              </p>
+              <div className="mt-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">
+                    {pathname.startsWith("/admin")
+                      ? "Administration CRM"
+                      : pathname.startsWith("/supervisor")
+                        ? "Telephonie et CRM"
+                        : "Navigation workspace"}
+                  </p>
+                  <p className="mt-1 text-sm text-white/48">{workspace.note}</p>
+                </div>
+                <div className="rounded-full bg-emerald-400/12 px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200">
+                  OK
+                </div>
               </div>
             </div>
+            {(isAdmin || isSupervisor) && (
+              <button
+                type="button"
+                onClick={logout}
+                className="flex w-full items-center gap-3 rounded-[1.15rem] border border-white/8 px-3.5 py-3 text-left text-sm text-white/62 transition hover:border-red-400/24 hover:bg-red-500/8 hover:text-red-300"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/8 text-white/60">
+                  <LogOut className="h-4 w-4" />
+                </div>
+                <span>Se deconnecter</span>
+              </button>
+            )}
           </div>
         )}
       </div>

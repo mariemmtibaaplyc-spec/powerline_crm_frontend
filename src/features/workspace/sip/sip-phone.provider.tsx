@@ -75,8 +75,10 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
   const audioRef        = useRef<HTMLAudioElement | null>(null);
   const audioCtxRef     = useRef<AudioContext | null>(null);
   const stopRingtoneRef = useRef<(() => void) | null>(null);
-  const retryTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const retryCountRef   = useRef(0);
+  const retryTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryCountRef           = useRef(0);
+  // Fallback: if call.ended WS never arrives after SIP Terminated, force qualification
+  const terminationFallbackRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Auto-answer flag ────────────────────────────────────────────────────
   // Armé par triggerAutoAnswer() depuis use-workspace-socket.ts.
@@ -231,6 +233,19 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
         stopRingtone();
         setHasIncomingCall(false);
         sessionRef.current = null;
+
+        // Fallback: if the backend never sends call.ended (WS lag or missed event),
+        // force qualification after 2 s so the agent isn't stuck in "in_call".
+        // If call.ended arrives first it will transition agentStatus away from
+        // "in_call", and the timer will find nothing to do.
+        if (terminationFallbackRef.current) clearTimeout(terminationFallbackRef.current);
+        terminationFallbackRef.current = setTimeout(() => {
+          const snap = useWorkspaceStore.getState();
+          if (snap.agentStatus === "in_call") {
+            console.warn("[SipPhoneProvider] call.ended WS never arrived after Terminated — forcing openQualification()");
+            snap.openQualification();
+          }
+        }, 2000);
       }
     });
   };
@@ -376,6 +391,7 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
     stopRingtone();
     setHasIncomingCall(false);
     if (autoAnswerTimerRef.current) clearTimeout(autoAnswerTimerRef.current);
+    if (terminationFallbackRef.current) clearTimeout(terminationFallbackRef.current);
     pendingAutoAnswer.current = false;
     if (sessionRef.current) {
       sessionRef.current.bye().catch(() => {});
