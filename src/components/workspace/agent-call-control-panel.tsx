@@ -69,6 +69,16 @@ export function AgentCallControlPanel() {
     startManualCall,
     statusStartedAt,
   } = useAgentWorkspaceState();
+
+  // Log de rendu horodaté — mesure le délai entre update Zustand et render React
+  const prevAgentStatusRef = useRef<string | null>(null);
+  if (agentStatus !== prevAgentStatusRef.current) {
+    const { callSession, currentCallId } = useWorkspaceStore.getState();
+    console.log(
+      `[TIMING] React render t=${Date.now()} agentStatus=${agentStatus} callId=${callSession.backendCallId ?? currentCallId ?? 'none'}`,
+    );
+    prevAgentStatusRef.current = agentStatus;
+  }
   const { hangup: sipHangup, accept: sipAccept, hasIncomingCall } = useSipPhone();
   const [dialPadOpen, setDialPadOpen] = useState(false);
   const [manualNumber, setManualNumber] = useState("");

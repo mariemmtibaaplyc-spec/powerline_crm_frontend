@@ -400,8 +400,23 @@ startPause: (pauseCode) => {
 
   const callId = callSession.backendCallId;
 
+  console.log(`[PREDICTIVE RESUME] closeQualification entered nextStatus=${nextStatus} userId=${userId ?? 'null'} callId=${callId ?? 'null'} activeCampaignId=${activeCampaignId ?? 'null'} selectedQualificationId=${selectedQualificationId ?? 'null'} agentStatus=${useWorkspaceStore.getState().agentStatus}`);
+
   if (!callId) {
     // Pas de call Backend (test/mock) → comportement local uniquement
+    // On appelle quand même setAvailable/setPaused pour mettre à jour le statut
+    // agent en DB (l'API /me n'a pas besoin de callId).
+    console.log(`[ResumePredictive] qualification closed (no callId) nextStatus=${nextStatus}`);
+    import("@/features/workspace/api/workspace.api").then(({ workspaceApi }) => {
+      if (nextStatus === "paused") {
+        workspaceApi.setPaused(userId ?? 0).catch(console.error);
+      } else {
+        console.log(`[ResumePredictive] setAvailable via /me`);
+        workspaceApi.setAvailable(userId ?? 0).catch((err: any) =>
+          console.error("[ResumePredictive] setAvailable failed:", err?.message)
+        );
+      }
+    }).catch(console.error);
     set((state) => ({
       ...state,
       ...applyStatusTransition(state, nextStatus),
@@ -458,13 +473,20 @@ startPause: (pauseCode) => {
     console.error("[closeQualification] endCall failed:", err);
   }
 
-  // Signaler le statut au backend (FIX: setAvailable pour "waiting" — évite blocage WRAP_UP)
-  if (userId) {
-    if (nextStatus === "paused") {
-      workspaceApi.setPaused(userId).catch(console.error);
-    } else {
-      workspaceApi.setAvailable(userId).catch(console.error);
-    }
+  // Signaler le statut au backend après qualification.
+  // On utilise /me — pas besoin de userId valide côté URL.
+  // Le guard "if (userId)" est supprimé car il bloquait l'appel quand
+  // userId=0 ou null dans le store.
+  if (nextStatus === "paused") {
+    console.log(`[PredictiveWrapUp] pause -> PAUSED userId=${userId ?? 'me'} callId=${callId}`);
+    workspaceApi.setPaused(userId ?? 0).catch(console.error);
+  } else {
+    console.log(`[ResumePredictive] qualification closed callId=${callId} userId=${userId ?? 'me'}`);
+    workspaceApi.setAvailable(userId ?? 0).then(() => {
+      console.log(`[ResumePredictive] setAvailable success userId=${userId ?? 'me'}`);
+    }).catch((err: any) =>
+      console.error("[ResumePredictive] setAvailable failed:", err?.message)
+    );
   }
 
   // Refetch historique pour afficher le nouvel appel qualifié
@@ -535,12 +557,13 @@ startPause: (pauseCode) => {
 
     if (appointmentFailed) return;
 
-    if (userId) {
-      if (nextStatus === "paused") {
-        workspaceApi.setPaused(userId).catch(console.error);
-      } else {
-        workspaceApi.setAvailable(userId).catch(console.error);
-      }
+    if (nextStatus === "paused") {
+      workspaceApi.setPaused(userId ?? 0).catch(console.error);
+    } else {
+      console.log(`[ResumePredictive] setAvailable via /me userId=${userId ?? 'me'}`);
+      workspaceApi.setAvailable(userId ?? 0).then(() => {
+        console.log(`[ResumePredictive] setAvailable success userId=${userId ?? 'me'}`);
+      }).catch((err: any) => console.error("[ResumePredictive] setAvailable failed:", err?.message));
     }
 
     // Refetch historique
@@ -615,12 +638,13 @@ startPause: (pauseCode) => {
     // Si le RDV a échoué, garder la modale ouverte pour que l'agent voie l'erreur
     if (appointmentFailed) return;
 
-    if (userId) {
-      if (nextStatus === "paused") {
-        workspaceApi.setPaused(userId).catch(console.error);
-      } else {
-        workspaceApi.setAvailable(userId).catch(console.error);
-      }
+    if (nextStatus === "paused") {
+      workspaceApi.setPaused(userId ?? 0).catch(console.error);
+    } else {
+      console.log(`[ResumePredictive] setAvailable via /me userId=${userId ?? 'me'}`);
+      workspaceApi.setAvailable(userId ?? 0).then(() => {
+        console.log(`[ResumePredictive] setAvailable success userId=${userId ?? 'me'}`);
+      }).catch((err: any) => console.error("[ResumePredictive] setAvailable failed:", err?.message));
     }
 
     // Refetch historique
@@ -835,6 +859,7 @@ startPause: (pauseCode) => {
     console.log(
       `[initFromSession] userId=${params.userId} activeCampaignId=${params.activeCampaignId ?? 'none'} sipExtension=${params.sipExtension ?? 'none'}`,
     );
+    console.log(`[WorkspaceAgentId] userId=${params.userId} agentId=${params.userId} statusEndpointId=me (JWT-resolved)`);
 
     // 1. Mettre à jour l'identité et forcer le statut local en PAUSED immédiatement
     set((state) => ({

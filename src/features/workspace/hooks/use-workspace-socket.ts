@@ -71,9 +71,6 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     if (!token || !userId || connectedRef.current) return;
 
     connectedRef.current = true;
-    // Tracker local à cette instance d'effet — permet au cleanup de distinguer
-    // un vrai démontage (token changé) d'un cycle React StrictMode (même token).
-    let thisEffectActive = true;
 
     // ── 1. Namespace /calls ──────────────────────────────────────────────────
     const callsSocket = getCallsSocket(token);
@@ -91,6 +88,7 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       campaign?: { id: number; name: string };
     }) => {
       const startedAt = Date.now();
+      console.log(`[TIMING] WS recv call.contact.popup t=${startedAt} callId=${data.call_id}`);
 
       // ── Garde anti-race ──────────────────────────────────────────────────────
       // Ignorer l'événement si :
@@ -116,6 +114,12 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       // Mettre à jour la callSession avec les IDs Backend
       useWorkspaceStore.setState((state) => {
         const nextStatus = state.agentStatus === "in_call" ? "in_call" : "ringing";
+        // Préserver "manual" si call.initiated a déjà positionné la direction pour ce même appel
+        const isAlreadyManual =
+          state.callSession.direction === "manual" &&
+          state.callSession.backendCallId === data.call_id;
+        const direction = isAlreadyManual ? "manual" : "predictive";
+        console.log(`[TIMING] Zustand update call.contact.popup t=${Date.now()} callId=${data.call_id} agentStatus=${nextStatus} direction=${direction}`);
         return {
           agentStatus:      nextStatus,
           statusStartedAt:  state.agentStatus === nextStatus ? state.statusStartedAt : startedAt,
@@ -125,7 +129,7 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
           endingCallId:     null,
           callSession: {
             active:           true,
-            direction:        "predictive",
+            direction,
             currentNumber:    data.contact.phone,
             activeReminderId: state.callSession.activeReminderId,
             startedAt:        state.callSession.startedAt ?? startedAt,
@@ -138,7 +142,8 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
           },
         };
       });
-      console.log(`[PredictiveCall] attached callId=${data.call_id} campaignId=${data.campaign?.id ?? 'none'}`);
+      const resolvedDirection = useWorkspaceStore.getState().callSession.direction;
+      console.log(`[call.contact.popup] attached callId=${data.call_id} campaignId=${data.campaign?.id ?? 'none'} direction=${resolvedDirection}`);
 
       // ── Auto-answer SIP ──────────────────────────────────────────────────────
       onAutoAnswer?.();
@@ -203,11 +208,13 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     // Filet de sécurité : si call.contact.popup n'a pas encore attaché le callId
     // (race condition socket), on le rattache ici depuis call.answered.
     callsSocket.on("call.answered", (data: { call_id: number; agent_id?: number }) => {
+      console.log(`[TIMING] WS recv call.answered t=${Date.now()} callId=${data.call_id}`);
       useWorkspaceStore.setState((state) => {
         const needsCallId = !state.callSession.backendCallId && data.call_id;
         if (needsCallId) {
-          console.log(`[PredictiveCall] attached callId=${data.call_id} from call.answered (fallback)`);
+          console.log(`[call.answered] attached callId=${data.call_id} from call.answered (fallback) direction=${state.callSession.direction ?? 'predictive'}`);
         }
+        console.log(`[TIMING] Zustand update call.answered t=${Date.now()} callId=${data.call_id} agentStatus=in_call`);
         return {
           agentStatus:     "in_call",
           statusStartedAt: Date.now(),
@@ -215,7 +222,8 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
           callSession: needsCallId ? {
             ...state.callSession,
             active:       true,
-            direction:    "predictive",
+            // Préserver "manual" si call.initiated a déjà positionné la direction
+            direction:    state.callSession.direction === "manual" ? "manual" : "predictive",
             backendCallId: data.call_id,
           } : state.callSession,
         };
@@ -233,6 +241,7 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       source?: string;
       status?: string;
     }) => {
+      console.log(`[TIMING] WS recv call.ended t=${Date.now()} callId=${data.call_id} action=${data.action ?? 'none'} backendStatus=${data.status ?? 'none'}`);
       const currentState = useWorkspaceStore.getState();
       const currentCallId = currentState.callSession.backendCallId;
       const trackedCallId = currentState.currentCallId;
@@ -295,7 +304,10 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       agent_id: number;
       status:   string;
     }) => {
+      const tRecv = Date.now();
       if (data.agent_id !== userId) return;
+
+      console.log(`[TIMING] WS recv agent.status.changed t=${tRecv} agentId=${data.agent_id} backendStatus=${data.status}`);
 
       // ── Guard race condition ───────────────────────────────────────────────
       // Durant les 5s après connexion, on ignore tout événement AVAILABLE
@@ -306,7 +318,15 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
         return;
       }
 
-      useWorkspaceStore.getState().setAgentStatusFromWS(mapBackendStatus(data.status));
+      const frontStatus = mapBackendStatus(data.status);
+      if (data.status === "AVAILABLE") {
+        console.log(`[PREDICTIVE RESUME] WS agent.status.changed AVAILABLE received agentId=${data.agent_id} → frontStatus=${frontStatus} — applying to store`);
+      }
+      console.log(`[TIMING] Zustand update agent.status.changed t=${Date.now()} backendStatus=${data.status} frontStatus=${frontStatus}`);
+      useWorkspaceStore.getState().setAgentStatusFromWS(frontStatus);
+      if (data.status === "AVAILABLE") {
+        console.log(`[PREDICTIVE RESUME] store agentStatus after WS=${useWorkspaceStore.getState().agentStatus}`);
+      }
     });
 
     agentsSocket.connect();
@@ -321,7 +341,6 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
 
     // ── 4. Cleanup ───────────────────────────────────────────────────────────
     return () => {
-      thisEffectActive = false;
       clearTimeout(initGuardTimer);
 
       callsSocket.off("connect");

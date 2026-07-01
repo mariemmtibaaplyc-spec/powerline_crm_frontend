@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { UserAgent, Registerer, SessionState, Invitation } from "sip.js";
+import { UserAgent, Registerer, RegistererState, SessionState, Invitation } from "sip.js";
 import { useSessionStore } from "@/store/session.store";
 import { useAuthStore } from "../../auth/store/auth.store"
 import { workspaceApi } from "@/features/workspace/api/workspace.api";
@@ -194,7 +194,7 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
 
   const setupSessionListeners = (invitation: Invitation) => {
     invitation.stateChange.addListener((state) => {
-      console.log(`[SipPhoneProvider] Call session state changed to: ${state}`);
+      console.log(`[AMI-DIAG][SIP] SessionState → ${state} t=${Date.now()}`);
 
       if (state === SessionState.Established) {
         stopRingtone();
@@ -284,9 +284,10 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
           const sipHeaderAutoAnswer = String(headerVal ?? "").toLowerCase() === "true";
           const flagAutoAnswer = pendingAutoAnswer.current;
           const shouldAutoAnswer = sipHeaderAutoAnswer || flagAutoAnswer;
+          const callId = (invitation.request as any).getHeader?.("X-Crm-Call-Id") ?? "unknown";
 
           console.log(
-            `[SipPhoneProvider] Received incoming INVITE. X-AUTOANSWER=${headerVal ?? "absent"} | pendingAutoAnswer=${flagAutoAnswer} | shouldAutoAnswer=${shouldAutoAnswer}`
+            `[AMI-DIAG][SIP] INVITE RECEIVED — from=${invitation.request.from?.uri?.toString() ?? 'unknown'} to=${invitation.request.to?.uri?.toString() ?? 'unknown'} X-AUTOANSWER=${headerVal ?? "absent"} pendingAutoAnswer=${flagAutoAnswer} shouldAutoAnswer=${shouldAutoAnswer} t=${Date.now()}`,
           );
 
           setupSessionListeners(invitation);
@@ -317,23 +318,54 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
         },
       };
 
-      // Retry automatique si le WebSocket se ferme de façon inattendue
+      // ── Transport disconnect ──────────────────────────────────────────────
+      // Déclenche le rebuild qu'il y ait une erreur ou non (déconnexion propre
+      // = fermeture du WS sans erreur = même résultat : UA inutilisable).
       ua.transport.onDisconnect = (error?: Error) => {
+        // Ignorer si ce n'est plus l'UA courant (cleanupSip() déjà appelé)
+        if (uaRef.current !== ua) return;
+        console.warn(`[AMI-DIAG][SIP] Transport onDisconnect — hasError=${!!error} msg=${error?.message ?? 'none'} t=${Date.now()}`);
         if (error) {
           console.warn("[SipPhoneProvider] Transport déconnecté avec erreur:", error.message);
-          setRegistered(false);
-          onDisconnect?.();
+        } else {
+          console.warn("[SipPhoneProvider] Transport déconnecté proprement (WS closed) — rebuild needed");
         }
+        setRegistered(false);
+        onDisconnect?.();
       };
 
       const registerer = new Registerer(ua);
+
+      // ── Registerer stateChange ────────────────────────────────────────────
+      // Écouter toutes les transitions du Registerer.
+      // Si le Registerer passe Unregistered ou Terminated de façon inattendue
+      // (ex: Asterisk répond 503 à une requête post-BYE, ou le transport se
+      // ferme et SIP.js invalide l'enregistrement), reconstruire l'UA complet.
+      //
+      // Guard : uaRef.current !== ua → cleanupSip() a déjà été appelé
+      // intentionnellement → ignorer (pas de rebuild parasite).
+      registerer.stateChange.addListener((state: RegistererState) => {
+        if (uaRef.current !== ua) return; // cleanup intentionnel, ignorer
+
+        console.log(`[AMI-DIAG][SIP] RegistererState → ${state} t=${Date.now()}`);
+
+        if (state === RegistererState.Registered) {
+          setRegistered(true);
+        } else if (state === RegistererState.Unregistered || state === RegistererState.Terminated) {
+          console.warn(`[SipRecovery] registerer ${state} de façon inattendue — rebuilding UA`);
+          setRegistered(false);
+          // onDisconnect déclenchera tryInit() avec backoff exponentiel
+          onDisconnect?.();
+        }
+      });
+
       uaRef.current         = ua;
       registererRef.current = registerer;
 
       await ua.start();
       await registerer.register();
       setRegistered(true);
-      console.log("[SipPhoneProvider] SIP UA Registered successfully");
+      console.log("[SipPhoneProvider] SIP UA Registered successfully — [SipRecovery] re-register success");
     } catch (err) {
       console.error("[SipPhoneProvider] Error in SIP initialization:", err);
       onDisconnect?.();
@@ -381,8 +413,18 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Valeurs par défaut pour admin/superviseur sans extension SIP.
+// Empêche les erreurs "must be used within a SipPhoneProvider" quand
+// SipPhoneProvider n'est pas monté (utilisateur sans sipExtension).
+const SIP_NOOP: SipPhoneContextProps = {
+  hangup:            () => {},
+  accept:            () => {},
+  triggerAutoAnswer: () => {},
+  registered:        false,
+  hasIncomingCall:   false,
+};
+
 export const useSipPhone = () => {
   const context = useContext(SipPhoneContext);
-  if (!context) throw new Error("useSipPhone must be used within a SipPhoneProvider");
-  return context;
+  return context ?? SIP_NOOP;
 };

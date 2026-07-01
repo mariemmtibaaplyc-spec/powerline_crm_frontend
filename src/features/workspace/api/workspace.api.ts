@@ -212,24 +212,30 @@ function unwrapCallResponse(data: any): CallResponse {
 export const workspaceApi = {
 
   // ── Agent Status ─────────────────────────────────────────────────────────────
+  // Tous les appels self-service utilisent "me" → le backend résout l'ID depuis
+  // le JWT. Élimine les 403 causés par un userId incorrect dans le store
+  // (ex: session stale en localStorage après changement de campagne).
 
-  async getCurrentStatus(userId: number): Promise<AgentStatusResponse> {
-    const { data } = await apiClient.get(`/agent-statuses/${userId}/current`);
+  async getCurrentStatus(_userId: number): Promise<AgentStatusResponse> {
+    const { data } = await apiClient.get(`/agent-statuses/me/current`);
     return unwrap(data);
   },
 
-  async setAvailable(userId: number): Promise<AgentStatusResponse> {
-    const { data } = await apiClient.patch(`/agent-statuses/${userId}/available`);
+  async setAvailable(_userId: number): Promise<AgentStatusResponse> {
+    console.log(`[WorkspaceAgentId] setAvailable via "me" (storeUserId=${_userId})`);
+    const { data } = await apiClient.patch(`/agent-statuses/me/available`);
     return unwrap(data);
   },
 
-  async setPaused(userId: number): Promise<AgentStatusResponse> {
-    const { data } = await apiClient.patch(`/agent-statuses/${userId}/paused`);
+  async setPaused(_userId: number): Promise<AgentStatusResponse> {
+    console.log(`[WorkspaceAgentId] setPaused via "me" (storeUserId=${_userId})`);
+    const { data } = await apiClient.patch(`/agent-statuses/me/paused`);
     return unwrap(data);
   },
 
-  async setOffline(userId: number): Promise<AgentStatusResponse> {
-    const { data } = await apiClient.patch(`/agent-statuses/${userId}/offline`);
+  async setOffline(_userId: number): Promise<AgentStatusResponse> {
+    console.log(`[WorkspaceAgentId] setOffline via "me" (storeUserId=${_userId})`);
+    const { data } = await apiClient.patch(`/agent-statuses/me/offline`);
     return unwrap(data);
   },
 
@@ -321,7 +327,7 @@ export const workspaceApi = {
 
   // ── Daily session stats (footer) ─────────────────────────────────────────────
 
-  async getDailyStats(userId: number): Promise<{
+  async getDailyStats(_userId: number): Promise<{
     date:                  string;
     communication_seconds: number;
     qualification_seconds: number;
@@ -331,7 +337,8 @@ export const workspaceApi = {
     appointments_today:    number;
     calls_today:           number;
   }> {
-    const { data } = await apiClient.get(`/agent-statuses/${userId}/daily-stats`);
+    console.log(`[WorkspaceAgentId] getDailyStats via "me" (storeUserId=${_userId})`);
+    const { data } = await apiClient.get(`/agent-statuses/me/daily-stats`);
     return unwrap<any>(data);
   },
 

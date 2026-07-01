@@ -27,9 +27,16 @@ import { authApi } from "@/features/auth/api/auth.api";
 import { SipPhoneProvider, useSipPhone } from "@/features/workspace/sip/sip-phone.provider";
 
 
-function WorkspaceSocketConnector({ children }: { children: ReactNode }) {
+// Connecteur WS avec SIP (agents avec sipExtension)
+function WorkspaceSocketConnectorWithSip({ children }: { children: ReactNode }) {
   const { triggerAutoAnswer } = useSipPhone();
   useWorkspaceSocket(triggerAutoAnswer);
+  return <>{children}</>;
+}
+
+// Connecteur WS sans SIP (admin/superviseur sans extension)
+function WorkspaceSocketConnectorNoSip({ children }: { children: ReactNode }) {
+  useWorkspaceSocket(undefined);
   return <>{children}</>;
 }
 
@@ -65,6 +72,11 @@ export function formatAgentElapsedTime(milliseconds: number) {
 export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
   const session     = useSessionStore((s) => s.session);
   const authSession = useAuthStore((s) => s.session);
+
+  // SipPhoneProvider est monté uniquement si l'utilisateur a une extension SIP.
+  // Admin et superviseur sans sipExtension ne déclenchent pas /webrtc-credentials.
+  const effectiveUser = session?.user ?? authSession?.user;
+  const hasSipExtension = Boolean(effectiveUser?.sip_extension);
   const setSession  = useSessionStore((s) => s.setSession);
   const setAuthSession = useAuthStore((s) => s.setSession);
   const initFromSession    = useWorkspaceStore((s) => s.initFromSession);
@@ -140,12 +152,20 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveUserId]);
 
+  if (hasSipExtension) {
+    return (
+      <SipPhoneProvider>
+        <WorkspaceSocketConnectorWithSip>
+          {children}
+        </WorkspaceSocketConnectorWithSip>
+      </SipPhoneProvider>
+    );
+  }
+
   return (
-    <SipPhoneProvider>
-      <WorkspaceSocketConnector>
-        {children}
-      </WorkspaceSocketConnector>
-    </SipPhoneProvider>
+    <WorkspaceSocketConnectorNoSip>
+      {children}
+    </WorkspaceSocketConnectorNoSip>
   );
 }
 
