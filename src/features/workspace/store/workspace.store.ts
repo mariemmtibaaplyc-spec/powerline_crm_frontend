@@ -32,6 +32,14 @@ interface BackendQualification {
   is_active: boolean;
 }
 
+function buildReminderDraftNote(values: ReminderFormValues) {
+  const schedule = `${values.date} ${values.time}`;
+  const note = values.note.trim();
+  return note
+    ? `[RAPPEL ${schedule}] ${note}`
+    : `[RAPPEL ${schedule}]`;
+}
+
 // ── Interface store ─────────────────────────────────────────────────────────
 interface AgentWorkspaceStoreState {
   // ── State existant ────────────────────────────────────────────────────────
@@ -468,9 +476,11 @@ startPause: (pauseCode) => {
     );
     await workspaceApi.endCall(callId, {
       qualification_id: selectedQualificationId ?? undefined,
+      require_qualification: true,
     });
   } catch (err) {
     console.error("[closeQualification] endCall failed:", err);
+    return;
   }
 
   // Signaler le statut au backend après qualification.
@@ -535,24 +545,15 @@ startPause: (pauseCode) => {
     const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
     let appointmentFailed = false;
     try {
-      const response = await workspaceApi.endCall(callId, {
+      await workspaceApi.endCall(callId, {
         qualification_id: selectedQualificationId ?? undefined,
-        appointment: {
-          scheduled_at: `${values.date}T${values.time}:00`,
-          notes: values.note,
-        },
+        require_qualification: true,
+        notes: buildReminderDraftNote(values),
       });
-
-      if (response.appointment_error) {
-        appointmentFailed = true;
-        set({ appointmentError: "Le rappel n'a pas pu être créé. Vérifiez que l'appel est associé à un contact, ou continuez sans rappel." });
-      } else if (response.appointment) {
-        useWorkspaceStore.getState().fetchAppointments(values.date).catch(() => {});
-      }
     } catch (err) {
       console.error("[submitReminderQualification] endCall failed:", err);
       appointmentFailed = true;
-      set({ appointmentError: "Le rappel n'a pas pu être créé. Vérifiez les informations de l'appel." });
+      set({ appointmentError: "Le rappel n'a pas pu être enregistré. Vérifiez les informations de l'appel." });
     }
 
     if (appointmentFailed) return;
@@ -615,6 +616,7 @@ startPause: (pauseCode) => {
     try {
       const response = await workspaceApi.endCall(callId, {
         qualification_id: selectedQualificationId ?? undefined,
+        require_qualification: true,
         appointment: {
           scheduled_at: `${values.date}T${values.time}:00`,
           notes: values.note,

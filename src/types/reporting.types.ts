@@ -24,12 +24,14 @@ export interface ReportingContactReachabilityData {
 
 export interface ReportingProductionEvolutionParams
   extends Pick<ReportingDashboardParams, "from" | "to" | "campaign_id"> {
-  interval?: "day" | "week" | "month";
+  interval?: "hour" | "day" | "week" | "month";
 }
 
 export interface ReportingProductionEvolutionPoint {
   date: string;
   total_calls: number;
+  attempted_calls?: number;
+  displayed_calls?: number;
   total_sales: number;
   total_appointments: number;
   conversion_rate: number;
