@@ -194,6 +194,35 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ── Logs ICE/DTLS pour debug WebRTC ────────────────────────────────────
+  // Le peerConnection n'existe qu'après création du sessionDescriptionHandler
+  // (déclenchée par accept()), donc on poll jusqu'à ce qu'il apparaisse.
+  const attachRtcDiagLogging = (invitation: Invitation) => {
+    let attached = false;
+    const tryAttach = () => {
+      if (attached) return;
+      const sdh = invitation.sessionDescriptionHandler as any;
+      const pc: RTCPeerConnection | undefined = sdh?.peerConnection;
+      if (!pc) {
+        setTimeout(tryAttach, 200);
+        return;
+      }
+      attached = true;
+      console.log(`[AMI-DIAG][RTC] peerConnection attached — iceGatheringState=${pc.iceGatheringState} iceConnectionState=${pc.iceConnectionState} connectionState=${pc.connectionState}`);
+      pc.addEventListener("icegatheringstatechange", () =>
+        console.log(`[AMI-DIAG][RTC] iceGatheringState → ${pc.iceGatheringState}`));
+      pc.addEventListener("iceconnectionstatechange", () =>
+        console.log(`[AMI-DIAG][RTC] iceConnectionState → ${pc.iceConnectionState}`));
+      pc.addEventListener("connectionstatechange", () =>
+        console.log(`[AMI-DIAG][RTC] connectionState (DTLS/global) → ${pc.connectionState}`));
+      pc.addEventListener("signalingstatechange", () =>
+        console.log(`[AMI-DIAG][RTC] signalingState → ${pc.signalingState}`));
+      pc.addEventListener("icecandidateerror", (e: any) =>
+        console.warn(`[AMI-DIAG][RTC] icecandidateerror — errorCode=${e.errorCode} errorText=${e.errorText} url=${e.url}`));
+    };
+    tryAttach();
+  };
+
   const setupSessionListeners = (invitation: Invitation) => {
     invitation.stateChange.addListener((state) => {
       console.log(`[AMI-DIAG][SIP] SessionState → ${state} t=${Date.now()}`);
@@ -255,10 +284,13 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
       cleanupSip();
       console.log(`[SipPhoneProvider] Initializing SIP UA for ${credentials.username} on ${credentials.wsServer}`);
 
-      const iceServers = [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun.cloudflare.com:3478" },
+      const iceServers: RTCIceServer[] = [
+        { urls: "stun:pbx.powerlinecrm.com:3478" },
+        {
+          urls:       "turn:pbx.powerlinecrm.com:3478",
+          username:   process.env.NEXT_PUBLIC_TURN_USER,
+          credential: process.env.NEXT_PUBLIC_TURN_PASSWORD,
+        },
       ];
 
       const ua = new UserAgent({
@@ -276,7 +308,7 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
           peerConnectionConfiguration: {
             iceServers,
             iceTransportPolicy: "all",
-            bundlePolicy:       "max-bundle",
+            bundlePolicy:       "balanced",
             rtcpMuxPolicy:      "require",
           },
         },
@@ -306,6 +338,7 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
           );
 
           setupSessionListeners(invitation);
+          attachRtcDiagLogging(invitation);
 
           if (shouldAutoAnswer) {
             pendingAutoAnswer.current = false;
