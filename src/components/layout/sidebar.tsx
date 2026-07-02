@@ -8,7 +8,6 @@ import {
   BookUser,
   CalendarCheck2,
   ChevronDown,
-  DollarSign,
   FileUser,
   History,
   Headphones,
@@ -73,11 +72,10 @@ const adminSections: NavSection[] = [
         children: [
           { label: "Liste des campagnes", href: "/admin/campaigns" },
           { label: "Qualifications", href: "/admin/campaigns/qualifications" },
-          { label: "Leads", href: "/admin/campaigns/leads" },
         ],
       },
       { label: "Listes", href: "/admin/lists", icon: List },
-      { label: "Ventes", href: "/admin/sales", icon: DollarSign },
+      { label: "RDV", href: "/admin/sales", icon: CalendarCheck2 },
       {
         label: "Data",
         icon: Users,
@@ -129,7 +127,7 @@ const supervisorSections: NavSection[] = [
     title: "Production",
     items: [
       { label: "Campagnes", href: "/supervisor/campaigns", icon: Megaphone },
-      { label: "Ventes", href: "/supervisor/sales", icon: DollarSign },
+      { label: "RDV", href: "/supervisor/sales", icon: CalendarCheck2 },
       {
         label: "Enregistrements",
         href: "/supervisor/recordings",
@@ -172,7 +170,6 @@ const genericSections: NavSection[] = [
     title: "CRM",
     items: [
       { label: "Contacts", href: "/crm/contacts", icon: Users },
-      { label: "Leads", href: "/crm/leads", icon: Megaphone },
       { label: "Listes", href: "/crm/lists", icon: List },
     ],
   },
