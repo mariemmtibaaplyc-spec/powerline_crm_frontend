@@ -15,26 +15,26 @@ export function CampaignLeadsPanel({ campaignId }: { campaignId: string }) {
   return (
     <Card className="border border-[#dce6f0] bg-white shadow-[0_18px_42px_rgba(20,32,53,0.08)]">
       <CardHeader>
-        <CardTitle>Leads campagne</CardTitle>
+        <CardTitle>Contacts campagne</CardTitle>
         <CardDescription>
-          Leads reels charges depuis le backend pour cette campagne.
+          Contacts de campagne charges depuis le backend pour cette campagne.
         </CardDescription>
       </CardHeader>
       <CardContent>
         {leadsError ? (
           <div className="rounded-[1.5rem] border border-dashed border-[#f0d8de] bg-[#fff8fa] px-6 py-10 text-center">
             <p className="text-base font-semibold text-[#102033]">
-              Impossible de charger les leads.
+              Impossible de charger les contacts de campagne.
             </p>
             <p className="mt-2 text-sm text-[#8a5a67]">{leadsError}</p>
           </div>
         ) : isLoadingLeads ? (
           <div className="rounded-[1.5rem] border border-dashed border-[#d7e2ee] bg-[#fbfdff] px-6 py-10 text-center">
             <p className="text-base font-semibold text-[#102033]">
-              Chargement des leads en cours...
+              Chargement des contacts de campagne en cours...
             </p>
             <p className="mt-2 text-sm text-[#607287]">
-              Les leads sont recuperes depuis le backend.
+              Les contacts sont recuperes depuis le backend.
             </p>
           </div>
         ) : leads.length > 0 ? (
@@ -57,7 +57,7 @@ export function CampaignLeadsPanel({ campaignId }: { campaignId: string }) {
                     <TableCell>
                       <div className="space-y-1">
                         <p className="font-semibold text-[#102033]">
-                          {[lead.firstName, lead.lastName].filter(Boolean).join(" ") || `Lead ${lead.id}`}
+                          {[lead.firstName, lead.lastName].filter(Boolean).join(" ") || `Contact ${lead.id}`}
                         </p>
                         <p className="text-xs uppercase tracking-[0.16em] text-[#7a8da3]">
                           ID {lead.id}
@@ -78,7 +78,7 @@ export function CampaignLeadsPanel({ campaignId }: { campaignId: string }) {
         ) : (
           <div className="rounded-[1.5rem] border border-dashed border-[#d7e2ee] bg-[#fbfdff] px-6 py-10 text-center">
             <p className="text-base font-semibold text-[#102033]">
-              Aucun lead n est associe a cette campagne.
+              Aucun contact n est associe a cette campagne.
             </p>
             <p className="mt-2 text-sm text-[#607287]">
               Le panneau n affiche aucune donnee fictive.

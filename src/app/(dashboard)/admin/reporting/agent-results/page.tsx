@@ -359,13 +359,6 @@ export default function Page() {
                 icon={<Target className="h-5 w-5" />}
                 tone="blue"
               />
-              <KPICard
-                label="Taux conversion moyen"
-                value={<PercentText value={kpis.averageConversion} />}
-                caption="Affiche uniquement si la performance le fournit."
-                icon={<Target className="h-5 w-5" />}
-                tone="navy"
-              />
             </KPIGrid>
 
             <ReportingTableCard
@@ -383,7 +376,6 @@ export default function Page() {
                         <TableHeadCell>RDV total</TableHeadCell>
                         <TableHeadCell>RDV faits</TableHeadCell>
                         <TableHeadCell>Taux presence</TableHeadCell>
-                        <TableHeadCell>Taux conversion</TableHeadCell>
                         <TableHeadCell>Statut</TableHeadCell>
                       </tr>
                     </thead>
@@ -407,9 +399,6 @@ export default function Page() {
                           </TableCell>
                           <TableCell>
                             <PercentText value={row.showRate} />
-                          </TableCell>
-                          <TableCell>
-                            <PercentText value={row.conversionRate} />
                           </TableCell>
                           <TableCell>
                             <StatusBadge value={getDisplayStatus(row.status)} />

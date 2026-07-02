@@ -894,7 +894,7 @@ export default function Page() {
       <PageHeader
         eyebrow="Admin workspace"
         title="Rapports"
-        description="Dashboard global CRM branche au backend reporting, avec une lecture metier plus claire des appels, de la conversion, des campagnes et des agents."
+        description="Dashboard global CRM branche au backend reporting, avec une lecture metier plus claire des appels, des rendez-vous, des campagnes et des agents."
         actions={
           <>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#dce7f3] bg-white px-3 py-2 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)]">
@@ -1030,14 +1030,12 @@ export default function Page() {
                 "Appels",
                 "Appels completes",
                 "Duree moyenne",
-                "Taux conversion",
               ]}
               rows={topAgentsRows.map((row) => [
                 { key: "agent_name", value: row.name },
                 { key: "calls", value: row.calls },
                 { key: "completed_calls", value: row.completedCalls },
                 { key: "avg_duration", value: row.averageDuration },
-                { key: "conversion_rate", value: row.conversionRate },
               ])}
             />
 
@@ -1069,22 +1067,6 @@ export default function Page() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.25rem] border border-[#e7eef5] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-4 py-3">
-                  <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6b7e92]">
-                    Conversion
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-[#102033]">
-                    {getDisplayText(
-                      dashboardData.conversion,
-                      ["conversion_rate", "taux_conversion", "conversion", "rate"],
-                      "—",
-                    )}
-                  </p>
-                  <p className="mt-1 text-sm text-[#607287]">
-                    Taux global exploitable immediatement.
-                  </p>
-                </div>
-
                 <div className="rounded-[1.25rem] border border-[#e7eef5] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-4 py-3">
                   <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6b7e92]">
                     Appels

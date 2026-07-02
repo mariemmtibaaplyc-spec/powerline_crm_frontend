@@ -1,19 +1,42 @@
 "use client";
 
-import { useMemo } from "react";
-import { MOCK_RECORDINGS, RECORDING_STATUS_OPTIONS } from "@/features/recordings/mocks/recordings.mock";
+import { useCallback, useEffect, useState } from "react";
+import { RECORDING_STATUS_OPTIONS, recordingsApi } from "@/features/recordings/api/recordings.api";
+import type { RecordingRecord } from "@/types/recording.types";
 
 export function useRecordings() {
-  const recordings = useMemo(() => {
-    return [...MOCK_RECORDINGS].sort((left, right) => {
-      const leftKey = `${left.date}T${left.time}:00`;
-      const rightKey = `${right.date}T${right.time}:00`;
-      return rightKey.localeCompare(leftKey);
-    });
+  const [recordings, setRecordings] = useState<RecordingRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadRecordings = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const nextRecordings = await recordingsApi.getRecordings();
+      setRecordings(nextRecordings);
+    } catch (loadError) {
+      setRecordings([]);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Impossible de charger les enregistrements.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadRecordings();
+  }, [loadRecordings]);
 
   return {
     recordings,
     statusOptions: RECORDING_STATUS_OPTIONS,
+    isLoading,
+    error,
+    reload: loadRecordings,
   };
 }

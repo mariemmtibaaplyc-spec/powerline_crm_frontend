@@ -3,15 +3,16 @@
 import { ContactRound, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminContacts } from "@/features/admin-contacts/hooks/use-admin-contacts";
+import { ContactsPagination } from "@/components/admin-contacts/contacts-pagination";
 import { ContactsTable } from "@/components/admin-contacts/contacts-table";
 import { ContactStatusBadge } from "@/components/admin-contacts/contact-status-badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 
 const UNKNOWN_STATUS_FILTER = "UNKNOWN";
+const DEFAULT_PAGE_SIZE = 25;
 
 function isUnknownContactStatus(status: string | null | undefined) {
   if (typeof status !== "string") {
@@ -32,6 +33,7 @@ export function ContactsDirectoryModule() {
   } = useAdminContacts();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
@@ -40,7 +42,7 @@ export function ContactsDirectoryModule() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, sourceFilter, statusFilter, cityFilter]);
+  }, [pageSize, search, sourceFilter, statusFilter, cityFilter]);
 
   useEffect(() => {
     void loadContacts({
@@ -49,11 +51,11 @@ export function ContactsDirectoryModule() {
       source: sourceFilter === "all" ? undefined : sourceFilter,
       city: cityFilter === "all" ? undefined : cityFilter,
       page,
-      limit: 10,
+      limit: pageSize,
       sortBy: "created_at",
       order: "desc",
     });
-  }, [cityFilter, loadContacts, page, search, sourceFilter, statusQueryParam]);
+  }, [cityFilter, loadContacts, page, pageSize, search, sourceFilter, statusQueryParam]);
 
   const uniqueStatuses = useMemo(
     () =>
@@ -98,6 +100,7 @@ export function ContactsDirectoryModule() {
       ).sort(),
     [contacts],
   );
+  const visibleCount = filteredContacts.length;
 
   return (
     <section className="space-y-6">
@@ -174,7 +177,7 @@ export function ContactsDirectoryModule() {
 
           <div className="flex flex-wrap items-center gap-2 text-sm text-[#607287]">
             <span className="rounded-full border border-[#e6edf6] bg-[#fbfdff] px-3 py-1.5 font-medium text-[#24415d]">
-              {filteredContacts.length} contacts affichés
+              {visibleCount} contacts affiches
             </span>
             {statusFilter !== "all" ? <ContactStatusBadge status={statusFilter} /> : null}
             {sourceFilter !== "all" ? (
@@ -202,10 +205,14 @@ export function ContactsDirectoryModule() {
           ) : filteredContacts.length > 0 ? (
             <>
               <ContactsTable contacts={filteredContacts} />
-              <Pagination
+              <ContactsPagination
                 currentPage={contactsMeta.page}
                 totalPages={contactsMeta.totalPages}
+                pageSize={contactsMeta.limit || pageSize}
+                totalItems={contactsMeta.total}
+                currentItemCount={visibleCount}
                 onPageChange={setPage}
+                onPageSizeChange={setPageSize}
               />
             </>
           ) : (

@@ -134,7 +134,7 @@ export function CampaignDetailModule() {
                 <CampaignStatusBadge status={campaign.status} />
               </div>
             </div>
-            <Metric label="Leads" value={campaign.leadsCount.toLocaleString("fr-FR")} />
+            <Metric label="Contacts campagne" value={campaign.leadsCount.toLocaleString("fr-FR")} />
             <Metric label="Agents" value={campaign.agentsCount.toLocaleString("fr-FR")} />
             <Metric label="Date de debut" value={campaign.startDate ?? "Non renseignee"} />
             <Metric label="Date de fin" value={campaign.endDate ?? "Non renseignee"} />

@@ -69,14 +69,14 @@ export function StatsCard({
           >
             {label}
           </p>
-          <p
+          <div
             className={cn(
               "font-semibold tracking-tight",
               density === "compact" ? "mt-2.5 text-[1.45rem] leading-none" : "mt-4 text-3xl",
             )}
           >
             {value}
-          </p>
+          </div>
         </div>
         <div
           className={cn(

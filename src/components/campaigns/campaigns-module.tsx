@@ -140,9 +140,9 @@ export function CampaignsModule() {
               detail="Vue active du portefeuille admin"
             />
             <SummaryCard
-              label="Leads exploites"
+              label="Contacts campagne"
               value={totalLeads.toLocaleString("fr-FR")}
-              detail="Volume total retourne par le backend"
+              detail="Volume total de contacts retourne par le backend"
             />
             <div className="rounded-[1.25rem] border border-[#e6edf6] bg-[linear-gradient(180deg,#fbfdff_0%,#f6faff_100%)] px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7a8da3]">Filtre courant</p>
