@@ -1,20 +1,5 @@
-import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SalesModule } from "@/components/admin-sales/sales-module";
 
 export default function Page() {
-  return (
-    <section className="space-y-6">
-      <PageHeader eyebrow="Powerline" title="Rendez-vous" description="Suivi des rendez-vous generes par la production." />
-      <Card>
-        <CardHeader>
-          <CardTitle>Structure prete</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            Cette route a ete creee pour accueillir la logique metier, les hooks et les composants du domaine concerne.
-          </p>
-        </CardContent>
-      </Card>
-    </section>
-  );
+  return <SalesModule />;
 }

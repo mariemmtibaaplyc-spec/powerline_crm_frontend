@@ -17,7 +17,6 @@ import {
   Megaphone,
   Settings,
   ShieldCheck,
-  Ticket,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -112,7 +111,6 @@ const adminSections: NavSection[] = [
       { label: "Utilisateurs", href: "/admin/users", icon: ShieldCheck },
       { label: "Mon compte", href: "/admin/account", icon: BookUser },
       { label: "Parametres", href: "/admin/settings", icon: Settings },
-      { label: "Tickets", href: "/admin/tickets", icon: Ticket },
     ],
   },
 ];

@@ -37,7 +37,7 @@ const workspaces = [
     label: "Admin workspace",
     note: "Configuration, import et pilotage global",
     icon: ShieldCheck,
-    search: "Rechercher un module, un ticket ou un import...",
+    search: "Rechercher un module, un contact ou un import...",
   },
   {
     match: "/crm",
