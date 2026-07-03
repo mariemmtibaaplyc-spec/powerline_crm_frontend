@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { useSessionStore } from "@/store/session.store";
+import { useAuthStore } from "@/features/auth/store/auth.store";
 import {
   MOCK_AGENT_IDENTITY,
   PAUSE_OPTIONS,
@@ -130,6 +132,14 @@ interface AgentWorkspaceStoreState {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+function hasValidAuthToken(): boolean {
+  if (typeof window === "undefined") return false;
+  const sessionToken = useSessionStore.getState().session?.accessToken ?? null;
+  const authToken = useAuthStore.getState().session?.accessToken ?? null;
+  const storageToken = window.localStorage.getItem("accessToken");
+  return Boolean(sessionToken ?? authToken ?? storageToken);
+}
 
 function resolvePauseType(code?: PauseType["code"]) {
   return PAUSE_OPTIONS.find((item) => item.code === code) ?? PAUSE_OPTIONS[0];
@@ -907,12 +917,14 @@ startPause: (pauseCode) => {
 
   fetchAppointments: async (date?) => {
     const { userId } = useWorkspaceStore.getState();
-    if (!userId) return;
+    if (!userId || !hasValidAuthToken()) return;
     try {
       const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
       const entries = await workspaceApi.getAgentAppointments(userId, date);
       set({ appointments: entries });
-    } catch (err) {
+    } catch (err: any) {
+      // Logout survenu pendant la requête en vol → 401 attendu, pas une erreur à logger
+      if (err?.response?.status === 401) return;
       console.error("[fetchAppointments] failed:", err);
     }
   },

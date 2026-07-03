@@ -427,7 +427,13 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
     if (terminationFallbackRef.current) clearTimeout(terminationFallbackRef.current);
     pendingAutoAnswer.current = false;
     if (sessionRef.current) {
-      sessionRef.current.bye().catch(() => {});
+      const session = sessionRef.current;
+      if (session.state === SessionState.Established) {
+        session.bye().catch(() => {});
+      } else if (session.state === SessionState.Initial) {
+        session.reject().catch(() => {});
+      }
+      // sinon (Terminating/Terminated/etc.) : cleanup silencieux, rien à envoyer
       sessionRef.current = null;
     }
     if (registererRef.current) {
