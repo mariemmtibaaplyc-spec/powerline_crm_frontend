@@ -109,6 +109,7 @@ interface AgentWorkspaceStoreState {
   startManualCall: (number: string) => Promise<void>;
   openReminderCall: (entry: Reminder | HistoryEntry) => void;
   setActiveProspect: (prospect: ProspectSheet) => void;
+  updateProspectField: (field: keyof ProspectSheet, value: string) => void;
   markClientHungUp: () => void;
   markAgentHungUp: () => void;
 
@@ -271,6 +272,44 @@ function createIdleCallSession(): CallSession {
     backendContactId: null,
     backendLeadId: null,
   };
+}
+
+// ── Autosave fiche prospect ──────────────────────────────────────────────────
+// Debounce simple : une seule sauvegarde en attente à la fois, réarmée à chaque
+// frappe. Ne s'active que si le contact est réellement résolu côté backend
+// (callSession.backendContactId) — sinon rien à persister (numéro inconnu).
+let prospectAutosaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleProspectAutosave(contactId: number) {
+  if (prospectAutosaveTimer) clearTimeout(prospectAutosaveTimer);
+  prospectAutosaveTimer = setTimeout(() => {
+    prospectAutosaveTimer = null;
+    void persistProspect(contactId);
+  }, 900);
+}
+
+async function persistProspect(contactId: number) {
+  const state = useWorkspaceStore.getState();
+  // Le contact actif a pu changer entre-temps (raccroché / nouvel appel) →
+  // ne pas écraser la fiche d'un autre prospect avec des données obsolètes.
+  if (state.callSession.backendContactId !== contactId) return;
+
+  const p = state.activeProspect;
+  const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+  try {
+    await workspaceApi.updateContact(contactId, {
+      first_name: p.firstName,
+      last_name: p.lastName,
+      phone2: p.phoneSecondary || undefined,
+      email: p.email || undefined,
+      address: p.address || undefined,
+      postal_code: p.postalCode || undefined,
+      city: p.city || undefined,
+      custom_fields: { commentaires: p.comments },
+    });
+  } catch (err) {
+    console.error(`[persistProspect] échec autosave contactId=${contactId}:`, err);
+  }
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────
@@ -816,6 +855,19 @@ startPause: (pauseCode) => {
       ...state,
       activeProspect: prospect,
     })),
+
+  updateProspectField: (field, value) => {
+    set((state) => ({
+      ...state,
+      activeProspect: { ...state.activeProspect, [field]: value },
+    }));
+    // Le telephone n'est jamais réécrit en autosave (clé de recherche du contact,
+    // un changement ici passerait par un flux dédié, pas la saisie fiche).
+    if (field === "phone" || field === "id") return;
+    const contactId = useWorkspaceStore.getState().callSession.backendContactId;
+    if (!contactId) return;
+    scheduleProspectAutosave(contactId);
+  },
 
   markClientHungUp: () =>
     set((state) => ({

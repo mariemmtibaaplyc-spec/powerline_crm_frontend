@@ -298,6 +298,25 @@ export const workspaceApi = {
     return Array.isArray(payload) ? payload : (payload?.items ?? payload?.data ?? []);
   },
 
+  // ── Contact update (autosave fiche prospect) ─────────────────────────────────
+
+  async updateContact(
+    contactId: number,
+    body: {
+      first_name?: string;
+      last_name?: string;
+      phone2?: string;
+      email?: string;
+      address?: string;
+      city?: string;
+      postal_code?: string;
+      custom_fields?: Record<string, any>;
+    },
+  ): Promise<ContactSearchResult> {
+    const { data } = await apiClient.patch(`/contacts/${contactId}`, body);
+    return unwrap(data);
+  },
+
   // ── Agent appointments ───────────────────────────────────────────────────────
 
   async getAgentAppointments(agentId: number, date?: string): Promise<AppointmentEntry[]> {

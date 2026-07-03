@@ -3,49 +3,65 @@
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAgentWorkspaceState } from "@/components/workspace/agent-workspace-provider";
+import type { ProspectSheet } from "@/types/workspace.types";
 
 interface ClientField {
   label: string;
+  field: keyof ProspectSheet;
   value: string;
   span?: string;
+  readOnly?: boolean;
 }
 
 export function ClientSheet() {
-  const { activeProspect, agentStatus, isPaused } = useAgentWorkspaceState();
+  const { activeProspect, agentStatus, isPaused, callSession, updateProspectField } =
+    useAgentWorkspaceState();
   const shouldHideProspectData = isPaused || agentStatus === "waiting";
+  // Fiche editable uniquement quand un contact reel est resolu cote backend
+  // (numero connu). Sur un numero inconnu, seul le telephone est affiche.
+  const isContactResolved = Boolean(callSession.backendContactId);
 
   const primaryFields: readonly ClientField[] = [
     {
       label: "Prenom",
+      field: "firstName",
       value: activeProspect.firstName,
     },
     {
       label: "Nom",
+      field: "lastName",
       value: activeProspect.lastName,
     },
     {
       label: "Telephone",
+      field: "phone",
       value: activeProspect.phone,
+      readOnly: true,
     },
     {
       label: "Telephone 2",
+      field: "phoneSecondary",
       value: activeProspect.phoneSecondary,
     },
     {
       label: "Email",
+      field: "email",
       value: activeProspect.email,
       span: "xl:col-span-2",
     },
     {
       label: "Adresse",
+      field: "address",
       value: activeProspect.address,
     },
     {
       label: "Code postal",
+      field: "postalCode",
       value: activeProspect.postalCode,
     },
     {
       label: "Ville",
+      field: "city",
       value: activeProspect.city,
     },
   ] as const;
@@ -69,21 +85,30 @@ export function ClientSheet() {
 
       <div className="space-y-6 px-6 py-6 sm:px-7">
         <div className="grid gap-4 xl:grid-cols-2">
-          {primaryFields.map((field) => (
-            <label
-              key={field.label}
-              className={field.span ? field.span : ""}
-            >
-              <span className="mb-2 block text-sm font-medium text-[#24415d]">
-                {field.label}
-              </span>
-              <Input
-                value={shouldHideProspectData ? "" : field.value}
-                readOnly
-                className="h-12 rounded-[1.15rem] border-[#d7e3ef] bg-[#fcfeff] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-              />
-            </label>
-          ))}
+          {primaryFields.map((field) => {
+            const fieldReadOnly =
+              field.readOnly || shouldHideProspectData || !isContactResolved;
+            return (
+              <label
+                key={field.label}
+                className={field.span ? field.span : ""}
+              >
+                <span className="mb-2 block text-sm font-medium text-[#24415d]">
+                  {field.label}
+                </span>
+                <Input
+                  value={shouldHideProspectData ? "" : field.value}
+                  readOnly={fieldReadOnly}
+                  onChange={
+                    fieldReadOnly
+                      ? undefined
+                      : (event) => updateProspectField(field.field, event.target.value)
+                  }
+                  className="h-12 rounded-[1.15rem] border-[#d7e3ef] bg-[#fcfeff] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                />
+              </label>
+            );
+          })}
         </div>
 
         <label className="block">
@@ -96,7 +121,12 @@ export function ClientSheet() {
                 ? ""
                 : activeProspect.comments
             }
-            readOnly
+            readOnly={shouldHideProspectData || !isContactResolved}
+            onChange={
+              shouldHideProspectData || !isContactResolved
+                ? undefined
+                : (event) => updateProspectField("comments", event.target.value)
+            }
             className="min-h-[160px] rounded-[1.25rem] border-[#d7e3ef] bg-[#fcfeff] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
           />
         </label>
