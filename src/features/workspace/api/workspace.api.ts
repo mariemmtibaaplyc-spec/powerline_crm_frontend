@@ -24,6 +24,7 @@ export interface CallResponse {
 }
 
 export interface EndCallBody {
+  require_qualification?: boolean;
   qualification_id?: number;
   result?: string;
   notes?: string;

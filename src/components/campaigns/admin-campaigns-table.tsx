@@ -30,7 +30,7 @@ export function AdminCampaignsTable({
             <TableHeadCell>Description</TableHeadCell>
             <TableHeadCell>Type</TableHeadCell>
             <TableHeadCell>Statut</TableHeadCell>
-            <TableHeadCell>Leads</TableHeadCell>
+            <TableHeadCell>Contacts</TableHeadCell>
             <TableHeadCell>Agents</TableHeadCell>
             <TableHeadCell>Creation</TableHeadCell>
             <TableHeadCell className="text-right">Action</TableHeadCell>

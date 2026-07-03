@@ -12,6 +12,9 @@ export interface SupervisionLiveSnapshot {
   active_calls: number;
   waiting_calls: number;
   calls_today: number;
+  attempted_calls_today?: number;
+  displayed_calls_today?: number;
+  appointments_today: number;
   answered_today: number;
   missed_today: number;
   abandoned_today: number;
@@ -85,6 +88,8 @@ export interface SupervisionCampaignLiveStat {
   active_calls: number;
   agents_in_call: number;
   calls_today: number;
+  attempted_calls_today?: number;
+  displayed_calls_today?: number;
   answer_rate: number;
   abandon_rate: number;
   contacts_available: number;

@@ -8,7 +8,6 @@ import {
   BookUser,
   CalendarCheck2,
   ChevronDown,
-  DollarSign,
   FileUser,
   History,
   Headphones,
@@ -75,11 +74,10 @@ const adminSections: NavSection[] = [
         children: [
           { label: "Liste des campagnes", href: "/admin/campaigns" },
           { label: "Qualifications", href: "/admin/campaigns/qualifications" },
-          { label: "Leads", href: "/admin/campaigns/leads" },
         ],
       },
       { label: "Listes", href: "/admin/lists", icon: List },
-      { label: "Ventes", href: "/admin/sales", icon: DollarSign },
+      { label: "RDV", href: "/admin/sales", icon: CalendarCheck2 },
       {
         label: "Data",
         icon: Users,
@@ -131,7 +129,7 @@ const supervisorSections: NavSection[] = [
     title: "Production",
     items: [
       { label: "Campagnes", href: "/supervisor/campaigns", icon: Megaphone },
-      { label: "Ventes", href: "/supervisor/sales", icon: DollarSign },
+      { label: "RDV", href: "/supervisor/sales", icon: CalendarCheck2 },
       {
         label: "Enregistrements",
         href: "/supervisor/recordings",
@@ -174,7 +172,6 @@ const genericSections: NavSection[] = [
     title: "CRM",
     items: [
       { label: "Contacts", href: "/crm/contacts", icon: Users },
-      { label: "Leads", href: "/crm/leads", icon: Megaphone },
       { label: "Listes", href: "/crm/lists", icon: List },
     ],
   },
@@ -303,12 +300,12 @@ export function Sidebar() {
   }, [pathname, sections]);
 
   return (
-    <aside className="hidden shrink-0 lg:flex lg:w-[286px] xl:w-[304px] 2xl:w-[320px]">
-      <div className="sticky top-2 flex h-[calc(100vh-1rem)] w-full flex-col rounded-[1.85rem] border border-[#122033] bg-[#0d1b2a] p-4 text-white shadow-[0_28px_80px_rgba(10,18,30,0.28)] xl:p-5">
-        <div className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
+    <aside className="hidden shrink-0 lg:flex lg:w-[238px] xl:w-[252px] 2xl:w-[264px]">
+      <div className="sticky top-2 flex h-[calc(100vh-1rem)] w-full flex-col rounded-[1.55rem] border border-[#122033] bg-[#0d1b2a] p-3 text-white shadow-[0_24px_64px_rgba(10,18,30,0.24)] xl:p-3.5">
+        <div className="rounded-[1.25rem] border border-white/10 bg-white/6 p-3">
           <div className="flex flex-col items-center gap-3 text-center">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.1rem] bg-[var(--accent)]/18 text-[#8fe6e0] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-              <WorkspaceIcon className="h-5 w-5" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] bg-[var(--accent)]/18 text-[#8fe6e0] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <WorkspaceIcon className="h-4 w-4" />
             </div>
             <div className="min-w-0">
               <p className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.24em] text-white/42">
@@ -316,11 +313,11 @@ export function Sidebar() {
               </p>
             </div>
           </div>
-          <div className="mt-4 flex flex-col items-center rounded-[1.2rem] border border-white/10 bg-black/15 px-4 py-3.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-            <p className="text-sm font-semibold">{workspace.user}</p>
+          <div className="mt-3 flex flex-col items-center rounded-[1rem] border border-white/10 bg-black/15 px-3 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <p className="text-[13px] font-semibold">{workspace.user}</p>
             <div
               className={cn(
-                "mt-3 inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] uppercase tracking-[0.16em]",
+                "mt-2.5 inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.16em]",
                 workspace.statusTone,
               )}
             >
@@ -330,13 +327,13 @@ export function Sidebar() {
           </div>
         </div>
 
-        <nav className="mt-5 flex-1 space-y-6 overflow-y-auto pr-1">
+        <nav className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1">
           {sections.map((section) => (
-            <div key={section.title} className="space-y-3">
-              <p className="px-2 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-white/35">
+            <div key={section.title} className="space-y-2">
+              <p className="px-1.5 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.22em] text-white/35">
                 {section.title}
               </p>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 {section.items.map((item) => {
                   const Icon = item.icon;
                   const active = isActive(pathname, item.href);
@@ -346,11 +343,11 @@ export function Sidebar() {
                     const expanded = openChildren[item.label] ?? childActive;
 
                     return (
-                      <div key={item.label} className="space-y-1.5">
+                      <div key={item.label} className="space-y-1">
                         <button
                           type="button"
                           className={cn(
-                            "flex w-full items-center gap-3 rounded-[1.15rem] border px-3.5 py-3 text-left text-sm transition",
+                            "flex w-full items-center gap-2.5 rounded-[0.95rem] border px-2.5 py-2.5 text-left text-[13px] transition",
                             childActive
                               ? "border-white/12 bg-[linear-gradient(135deg,rgba(15,106,102,0.2)_0%,rgba(43,78,142,0.24)_100%)] text-white shadow-[0_14px_36px_rgba(15,106,102,0.12)]"
                               : "border-transparent text-white/72 hover:border-white/8 hover:bg-white/6 hover:text-white",
@@ -364,18 +361,18 @@ export function Sidebar() {
                         >
                           <div
                             className={cn(
-                              "flex h-9 w-9 items-center justify-center rounded-2xl",
+                              "flex h-8 w-8 items-center justify-center rounded-[0.95rem]",
                               childActive
                                 ? "bg-white/12 text-[#9ee7e0]"
                                 : "bg-white/8 text-white/75",
                             )}
                           >
-                            <Icon className="h-4 w-4" />
+                            <Icon className="h-3.5 w-3.5" />
                           </div>
                           <span className="flex-1">{item.label}</span>
                           <ChevronDown
                             className={cn(
-                              "h-4 w-4 text-white/45 transition-transform",
+                              "h-3.5 w-3.5 text-white/45 transition-transform",
                               expanded && "rotate-180 text-white/72",
                             )}
                           />
@@ -388,8 +385,8 @@ export function Sidebar() {
                           )}
                         >
                           <div className="overflow-hidden">
-                            <div className="mt-1 rounded-[1.1rem] border border-white/8 bg-black/12 p-2 pl-[1.15rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                              <div className="space-y-1.5 border-l border-white/10 pl-[1.2rem]">
+                            <div className="mt-1 rounded-[0.95rem] border border-white/8 bg-black/12 p-1.5 pl-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                              <div className="space-y-1 border-l border-white/10 pl-4">
                                 {item.children.map((child) => {
                                   const childIsActive = isActive(pathname, child.href);
 
@@ -398,7 +395,7 @@ export function Sidebar() {
                                       key={child.href}
                                       href={child.href}
                                       className={cn(
-                                        "flex items-center gap-3 rounded-[1rem] border px-3 py-2.5 text-sm transition",
+                                        "flex items-center gap-2.5 rounded-[0.85rem] border px-2.5 py-2 text-[13px] transition",
                                         childIsActive
                                           ? "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08)_0%,rgba(84,140,221,0.12)_100%)] text-white shadow-[0_12px_28px_rgba(10,18,30,0.18)]"
                                           : "border-transparent text-white/62 hover:border-white/8 hover:bg-white/6 hover:text-white/88",
@@ -406,7 +403,7 @@ export function Sidebar() {
                                     >
                                       <span
                                         className={cn(
-                                          "h-2.5 w-2.5 rounded-full",
+                                          "h-2 w-2 rounded-full",
                                           childIsActive
                                             ? "bg-[#9ee7e0] shadow-[0_0_0_4px_rgba(158,231,224,0.12)]"
                                             : "bg-white/26",
@@ -425,7 +422,7 @@ export function Sidebar() {
                   }
 
                   const itemClassName = cn(
-                    "flex w-full items-center gap-3 rounded-[1.15rem] border px-3.5 py-3 text-left text-sm transition",
+                    "flex w-full items-center gap-2.5 rounded-[0.95rem] border px-2.5 py-2.5 text-left text-[13px] transition",
                     active
                       ? "border-white/12 bg-[linear-gradient(135deg,rgba(15,106,102,0.22)_0%,rgba(43,78,142,0.24)_100%)] text-white shadow-[0_14px_36px_rgba(15,106,102,0.14)]"
                       : "border-transparent text-white/72 hover:border-white/8 hover:bg-white/6 hover:text-white",
@@ -437,17 +434,17 @@ export function Sidebar() {
                     <>
                       <div
                         className={cn(
-                          "flex h-9 w-9 items-center justify-center rounded-2xl",
+                          "flex h-8 w-8 items-center justify-center rounded-[0.95rem]",
                           active
                             ? "bg-white/12 text-[#9ee7e0]"
                             : "bg-white/8 text-white/75",
                         )}
                       >
-                        <Icon className="h-4 w-4" />
+                        <Icon className="h-3.5 w-3.5" />
                       </div>
                       <span className="flex-1">{item.label}</span>
                       {active ? (
-                        <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9ee7e0]">
+                        <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#9ee7e0]">
                           Actif
                         </span>
                       ) : null}
@@ -479,49 +476,47 @@ export function Sidebar() {
         </nav>
 
         {isAgent ? (
-          <div className="mt-6 border-t border-white/8 pt-4">
+          <div className="mt-4 border-t border-white/8 pt-3">
             <p className="text-center font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.18em] text-white/28">
               Production
             </p>
-            <div className="mt-3 grid grid-cols-2 gap-2.5">
-              <div className="rounded-[0.95rem] border border-white/7 bg-black/10 px-3 py-3.5 text-center">
-                <p className="text-[1.6rem] font-semibold leading-none text-white">
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              <div className="rounded-[0.85rem] border border-white/7 bg-black/10 px-2.5 py-3 text-center">
+                <p className="text-[1.35rem] font-semibold leading-none text-white">
                   {rdvCount ?? "—"}
                 </p>
-                <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-white/42">
+                <p className="mt-1.5 text-[9px] uppercase tracking-[0.18em] text-white/42">
                   RDV
                 </p>
               </div>
-              <div className="rounded-[0.95rem] border border-white/7 bg-black/10 px-3 py-3.5 text-center">
-                <p className="text-[1.6rem] font-semibold leading-none text-white">
+              <div className="rounded-[0.85rem] border border-white/7 bg-black/10 px-2.5 py-3 text-center">
+                <p className="text-[1.35rem] font-semibold leading-none text-white">
                   {callsCount ?? "—"}
                 </p>
-                <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-white/42">
+                <p className="mt-1.5 text-[9px] uppercase tracking-[0.18em] text-white/42">
                   Appels
                 </p>
               </div>
             </div>
           </div>
         ) : (
-          <div className="mt-6 space-y-3">
-            <div className="rounded-[1.4rem] border border-white/10 bg-white/6 p-4">
-              <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-white/38">
-                Monitoring systeme
-              </p>
-              <div className="mt-3 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium">
-                    {pathname.startsWith("/admin")
-                      ? "Administration CRM"
-                      : pathname.startsWith("/supervisor")
-                        ? "Telephonie et CRM"
-                        : "Navigation workspace"}
-                  </p>
-                  <p className="mt-1 text-sm text-white/48">{workspace.note}</p>
-                </div>
-                <div className="rounded-full bg-emerald-400/12 px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200">
-                  OK
-                </div>
+          <div className="mt-4 rounded-[1.15rem] border border-white/10 bg-white/6 p-3">
+            <p className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.22em] text-white/38">
+              Monitoring systeme
+            </p>
+            <div className="mt-2.5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-medium">
+                  {pathname.startsWith("/admin")
+                    ? "Administration CRM"
+                    : pathname.startsWith("/supervisor")
+                      ? "Telephonie et CRM"
+                      : "Navigation workspace"}
+                </p>
+                <p className="mt-1 text-[13px] text-white/48">{workspace.note}</p>
+              </div>
+              <div className="rounded-full bg-emerald-400/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-200">
+                OK
               </div>
             </div>
             {(isAdmin || isSupervisor) && (

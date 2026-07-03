@@ -60,7 +60,6 @@ interface AgentProductivityRow {
   pauseTime?: ReportingPrimitive;
   dmc?: ReportingPrimitive;
   dmt?: ReportingPrimitive;
-  sales?: ReportingPrimitive;
   productivityRate?: ReportingPrimitive;
   performanceRate?: ReportingPrimitive;
 }
@@ -163,7 +162,6 @@ function buildAgentRows(data: ReportingAgentsProductivityData | null) {
         "avg_dmt",
         "dmt",
       ]),
-      sales: pickReportingValueByAliases(record, ["sales_count", "total_sales", "sales"]),
       productivityRate: pickReportingValueByAliases(record, [
         "productivity_rate",
         "production_rate",
@@ -407,7 +405,6 @@ export default function Page() {
                         <TableHeadCell>Temps pause</TableHeadCell>
                         <TableHeadCell>DMC</TableHeadCell>
                         <TableHeadCell>DMT</TableHeadCell>
-                        <TableHeadCell>Ventes</TableHeadCell>
                         <TableHeadCell>Taux prod</TableHeadCell>
                         <TableHeadCell>Taux perf</TableHeadCell>
                       </tr>
@@ -429,7 +426,6 @@ export default function Page() {
                           <TableCell><DurationText value={row.pauseTime} /></TableCell>
                           <TableCell><DurationText value={row.dmc} /></TableCell>
                           <TableCell><DurationText value={row.dmt} /></TableCell>
-                          <TableCell><CountText value={row.sales} /></TableCell>
                           <TableCell><PercentText value={row.productivityRate} /></TableCell>
                           <TableCell><PercentText value={row.performanceRate} /></TableCell>
                         </tr>

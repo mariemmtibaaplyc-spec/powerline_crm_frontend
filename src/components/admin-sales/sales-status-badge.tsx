@@ -5,21 +5,21 @@ const STATUS_STYLES: Record<
   SalesAppointmentStatus,
   { label: string; className: string }
 > = {
-  scheduled: {
+  SCHEDULED: {
     label: "Planifie",
     className: "border-[#dce7f8] bg-[#eef5ff] text-[#295086]",
   },
-  confirmed: {
-    label: "Confirme",
+  DONE: {
+    label: "Realise",
     className: "border-[#d3efe3] bg-[#effbf5] text-[#15795d]",
   },
-  pending: {
-    label: "En attente",
-    className: "border-[#f5dfb7] bg-[#fff7e8] text-[#a76b18]",
-  },
-  cancelled: {
+  CANCELLED: {
     label: "Annule",
     className: "border-[#f2cbd5] bg-[#fff1f5] text-[#c04f6d]",
+  },
+  MISSED: {
+    label: "Manque",
+    className: "border-[#f5dfb7] bg-[#fff7e8] text-[#a76b18]",
   },
 };
 

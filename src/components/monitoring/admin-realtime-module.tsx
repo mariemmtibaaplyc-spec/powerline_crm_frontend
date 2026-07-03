@@ -196,7 +196,6 @@ export function AdminRealtimeModule() {
                         <HeaderCell>Statut</HeaderCell>
                         <HeaderCell>Temps</HeaderCell>
                         <HeaderCell>Appels</HeaderCell>
-                        <HeaderCell>Ventes</HeaderCell>
                         <HeaderCell>Liste</HeaderCell>
                         <HeaderCell className="text-right">Actions</HeaderCell>
                       </tr>
@@ -207,7 +206,7 @@ export function AdminRealtimeModule() {
                       ))}
                       {visibleAgents.length === 0 ? (
                         <tr className="border-b border-[#eef2f6] bg-white text-[#607287]">
-                          <td className="px-3 py-6 text-sm" colSpan={7}>
+                          <td className="px-3 py-6 text-sm" colSpan={6}>
                             Aucun agent connecte a afficher pour le moment.
                           </td>
                         </tr>
@@ -308,7 +307,6 @@ function AgentRealtimeRow({
     lastAction: string;
     elapsedSeconds?: number;
     callsCount?: number;
-    salesCount?: number;
     listLabel?: string;
   };
   index: number;
@@ -368,7 +366,6 @@ function AgentRealtimeRow({
         {formatElapsedTime(agent.elapsedSeconds ?? 0)}
       </td>
       <td className="px-3 py-2.5 font-medium">{agent.callsCount ?? 0}</td>
-      <td className="px-3 py-2.5 font-medium">{agent.salesCount ?? 0}</td>
       <td className="px-3 py-2.5">
         <div className="space-y-0.5">
           <p>{agent.listLabel ?? agent.campaign}</p>

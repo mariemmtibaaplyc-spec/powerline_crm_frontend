@@ -7,17 +7,17 @@ export default function Page() {
     <section className="space-y-6">
       <PageHeader
         eyebrow="Administration CRM"
-        title="Leads"
-        description="Les leads sont lies a une campagne precise et se consultent depuis la fiche campagne."
+        title="Contacts campagne"
+        description="Les contacts de campagne se consultent depuis la fiche campagne."
       />
 
       <Card className="border border-[#dce6f0] bg-white shadow-[0_18px_42px_rgba(20,32,53,0.08)]">
         <CardContent className="px-6 py-12 text-center">
           <p className="text-base font-semibold text-[#102033]">
-            Selectionnez une campagne pour voir ses leads.
+            Selectionnez une campagne pour voir ses contacts.
           </p>
           <p className="mt-2 text-sm text-[#607287]">
-            Le backend expose les leads par campagne uniquement.
+            Le backend expose ces contacts par campagne uniquement.
           </p>
           <Link
             href="/admin/campaigns"

@@ -5,9 +5,9 @@ export const RECORDING_STATUS_OPTIONS: Array<{
   label: string;
 }> = [
   { value: "available", label: "Disponible" },
-  { value: "review", label: "A revoir" },
-  { value: "flagged", label: "Signale" },
-  { value: "archived", label: "Archive" },
+  { value: "processing", label: "En traitement" },
+  { value: "failed", label: "En erreur" },
+  { value: "expired", label: "Expire" },
 ];
 
 export const MOCK_RECORDINGS: RecordingRecord[] = [
@@ -31,7 +31,7 @@ export const MOCK_RECORDINGS: RecordingRecord[] = [
     clientName: "Imed Triki",
     phone: "+216 21 509 177",
     campaign: "NAT ISA Residentiel",
-    status: "review",
+    status: "processing",
     durationSeconds: 162,
     note: "Passage a verifier sur la gestion d'objection budget.",
   },
@@ -55,7 +55,7 @@ export const MOCK_RECORDINGS: RecordingRecord[] = [
     clientName: "Rahma Agraboui",
     phone: "+216 53 222 114",
     campaign: "NAT ISA Residentiel",
-    status: "flagged",
+    status: "failed",
     durationSeconds: 98,
     note: "Cliente opposee au rappel, vocabulaire sensible a revoir.",
   },
@@ -67,7 +67,7 @@ export const MOCK_RECORDINGS: RecordingRecord[] = [
     clientName: "Fakhreddine Ayari",
     phone: "+216 55 201 884",
     campaign: "Relance devis habitat",
-    status: "archived",
+    status: "expired",
     durationSeconds: 241,
     note: "Appel cloture, piste archivee apres annulation du prospect.",
   },
@@ -91,7 +91,7 @@ export const MOCK_RECORDINGS: RecordingRecord[] = [
     clientName: "Aymen Jebali",
     phone: "+216 24 887 633",
     campaign: "Eco Habitat Premium",
-    status: "review",
+    status: "processing",
     durationSeconds: 307,
     note: "Suivi plus long que prevu, appel garde pour audit qualite.",
   },

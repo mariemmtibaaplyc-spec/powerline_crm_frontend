@@ -5,12 +5,10 @@ import {
   BarChart3,
   CalendarCheck2,
   CalendarRange,
-  DollarSign,
   PhoneCall,
   RefreshCw,
-  Target,
+  TimerReset,
   TrendingUp,
-  Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { StatsCard } from "@/components/reporting/stats-card";
@@ -67,16 +65,6 @@ const metricSectionConfig: Array<{
     description: "Volumetrie et qualite de traitement des appels.",
   },
   {
-    key: "conversion",
-    title: "Conversion",
-    description: "Lecture du taux de transformation et des performances associees.",
-  },
-  {
-    key: "funnel",
-    title: "Funnel",
-    description: "Parcours global du lead jusqu'a la vente.",
-  },
-  {
     key: "agents",
     title: "Agents",
     description: "Synthese des indicateurs lies aux agents.",
@@ -85,11 +73,6 @@ const metricSectionConfig: Array<{
     key: "appointments",
     title: "Rendez-vous",
     description: "Suivi des rendez-vous planifies ou qualifies.",
-  },
-  {
-    key: "leads",
-    title: "Leads",
-    description: "Qualite et disponibilite du stock de leads.",
   },
 ];
 
@@ -853,65 +836,57 @@ export default function Page() {
     [dashboardData?.top_campaigns],
   );
 
-  const funnelCards = useMemo(
+  const summaryCards = useMemo(
     () => [
-      {
-        label: "Leads",
-        value: getDisplayText(
-          dashboardData?.funnel ?? dashboardData?.leads,
-          ["leads", "lead_count", "total_leads", "count"],
-          "—",
-        ),
-        caption: "Volume de leads suivi sur la periode.",
-        icon: <Users className="h-5 w-5" />,
-        tone: "blue" as const,
-      },
       {
         label: "Calls",
         value: getDisplayText(
-          dashboardData?.funnel ?? dashboardData?.calls,
+          dashboardData?.calls,
           ["total_calls", "call_count", "calls", "appels"],
           "—",
         ),
-        caption: "Interactions telephoniques detectees.",
+        caption: "Appels qualifies observes sur la periode.",
         icon: <PhoneCall className="h-5 w-5" />,
-        tone: "navy" as const,
+        tone: "blue" as const,
       },
       {
         label: "Rendez-vous",
         value: getDisplayText(
-          dashboardData?.funnel ?? dashboardData?.appointments,
+          dashboardData?.appointments,
           ["appointments", "rdv", "meetings", "appointment_count", "count"],
           "—",
         ),
         caption: "Rendez-vous qualifies ou planifies.",
         icon: <CalendarCheck2 className="h-5 w-5" />,
+        tone: "navy" as const,
+      },
+      {
+        label: "Show rate RDV",
+        value: getDisplayText(
+          dashboardData?.appointments,
+          ["show_rate_pct", "show_rate", "rate", "percentage"],
+          "—",
+        ),
+        caption: "Part des rendez-vous realises sur la periode.",
+        icon: <TimerReset className="h-5 w-5" />,
         tone: "teal" as const,
       },
       {
-        label: "Ventes",
-        value: getDisplayText(
-          dashboardData?.funnel ?? dashboardData?.sales,
-          ["sales", "vente", "sales_count", "count", "total_sales"],
-          "—",
-        ),
-        caption: "Transformation finale du funnel.",
-        icon: <DollarSign className="h-5 w-5" />,
+        label: "Campagnes actives",
+        value: topCampaignRows.length.toLocaleString("fr-FR"),
+        caption: "Lecture rapide du perimetre campagne remonte.",
+        icon: <BarChart3 className="h-5 w-5" />,
         tone: "amber" as const,
       },
       {
-        label: "Conversion globale",
-        value: getDisplayText(
-          dashboardData?.conversion ?? dashboardData?.funnel,
-          ["conversion_rate", "taux_conversion", "conversion", "rate", "performance"],
-          "—",
-        ),
-        caption: "Lecture consolidee du taux de conversion.",
-        icon: <Target className="h-5 w-5" />,
+        label: "Agents suivis",
+        value: topAgentsRows.length.toLocaleString("fr-FR"),
+        caption: "Agents visibles dans le resume de pilotage.",
+        icon: <BarChart3 className="h-5 w-5" />,
         tone: "blue" as const,
       },
     ],
-    [dashboardData],
+    [dashboardData, topAgentsRows.length, topCampaignRows.length],
   );
 
   return (
@@ -919,7 +894,7 @@ export default function Page() {
       <PageHeader
         eyebrow="Admin workspace"
         title="Rapports"
-        description="Dashboard global CRM branche au backend reporting, avec une lecture metier plus claire des appels, de la conversion, des campagnes et des agents."
+        description="Dashboard global CRM branche au backend reporting, avec une lecture metier plus claire des appels, des rendez-vous, des campagnes et des agents."
         actions={
           <>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#dce7f3] bg-white px-3 py-2 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)]">
@@ -1023,7 +998,7 @@ export default function Page() {
       {dashboardData ? (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            {funnelCards.map((card) => (
+            {summaryCards.map((card) => (
               <StatsCard
                 key={card.label}
                 label={card.label}
@@ -1041,7 +1016,7 @@ export default function Page() {
                 key={section.key}
                 title={section.title}
                 description={section.description}
-                metrics={getSectionMetrics(dashboardData[section.key], section.key === "funnel" ? 5 : 6)}
+                metrics={getSectionMetrics(dashboardData[section.key], 6)}
               />
             ))}
           </div>
@@ -1055,14 +1030,12 @@ export default function Page() {
                 "Appels",
                 "Appels completes",
                 "Duree moyenne",
-                "Taux conversion",
               ]}
               rows={topAgentsRows.map((row) => [
                 { key: "agent_name", value: row.name },
                 { key: "calls", value: row.calls },
                 { key: "completed_calls", value: row.completedCalls },
                 { key: "avg_duration", value: row.averageDuration },
-                { key: "conversion_rate", value: row.conversionRate },
               ])}
             />
 
@@ -1094,22 +1067,6 @@ export default function Page() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.25rem] border border-[#e7eef5] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-4 py-3">
-                  <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6b7e92]">
-                    Conversion
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-[#102033]">
-                    {getDisplayText(
-                      dashboardData.conversion,
-                      ["conversion_rate", "taux_conversion", "conversion", "rate"],
-                      "—",
-                    )}
-                  </p>
-                  <p className="mt-1 text-sm text-[#607287]">
-                    Taux global exploitable immediatement.
-                  </p>
-                </div>
-
                 <div className="rounded-[1.25rem] border border-[#e7eef5] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-4 py-3">
                   <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6b7e92]">
                     Appels

@@ -6,16 +6,16 @@ const STATUS_META: Record<RecordingStatus, { label: string; className: string }>
     label: "Disponible",
     className: "border-[#d3efe3] bg-[#effbf5] text-[#15795d]",
   },
-  review: {
-    label: "A revoir",
+  processing: {
+    label: "En traitement",
     className: "border-[#f5dfb7] bg-[#fff7e8] text-[#a76b18]",
   },
-  flagged: {
-    label: "Signale",
+  failed: {
+    label: "En erreur",
     className: "border-[#f2cbd5] bg-[#fff1f5] text-[#c04f6d]",
   },
-  archived: {
-    label: "Archive",
+  expired: {
+    label: "Expire",
     className: "border-[#dce6f0] bg-[#f5f8fc] text-[#607287]",
   },
 };

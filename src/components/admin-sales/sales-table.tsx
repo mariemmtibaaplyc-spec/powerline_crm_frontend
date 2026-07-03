@@ -37,7 +37,7 @@ export function SalesTable({
           <tbody className="[&_tr:last-child_td]:border-b-0">
             {items.map((item) => (
               <tr
-                key={item.id}
+                key={`${item.id}-${item.scheduledAt}-${item.agentId}`}
                 className="transition hover:bg-[linear-gradient(180deg,#fbfdff_0%,#f7fbff_100%)]"
               >
                 <TableCell className="whitespace-nowrap">{item.date}</TableCell>
@@ -47,7 +47,7 @@ export function SalesTable({
                 <TableCell>
                   <div className="space-y-1">
                     <p className="font-semibold text-[#102033]">{item.clientName}</p>
-                    <p className="text-sm text-[#607287]">{item.sourceList}</p>
+                    <p className="text-sm text-[#607287]">{item.contactLabel}</p>
                   </div>
                 </TableCell>
                 <TableCell className="whitespace-nowrap">

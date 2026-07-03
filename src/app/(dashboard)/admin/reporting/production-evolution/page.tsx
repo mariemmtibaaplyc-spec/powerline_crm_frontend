@@ -3,8 +3,6 @@
 import {
   CalendarRange,
   PhoneCall,
-  Target,
-  TrendingUp,
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -12,7 +10,6 @@ import { CountText } from "@/components/reporting/count-text";
 import { DateRangePill } from "@/components/reporting/date-range-pill";
 import { KPIGrid } from "@/components/reporting/kpi-grid";
 import { KPICard } from "@/components/reporting/kpi-card";
-import { PercentText } from "@/components/reporting/percent-text";
 import { ReportingEmptyState } from "@/components/reporting/reporting-empty-state";
 import { ReportingErrorState } from "@/components/reporting/reporting-error-state";
 import { ReportingFilters } from "@/components/reporting/reporting-filters-panel";
@@ -25,7 +22,6 @@ import { Table, TableCell, TableHeadCell, TableWrapper } from "@/components/ui/t
 import { useCampaigns } from "@/features/campaigns/hooks/use-campaigns";
 import { useProductionEvolutionReporting } from "@/features/reporting/hooks/use-production-evolution-reporting";
 import { formatReportingDate, formatReportingDateRange } from "@/features/reporting/lib/date-range";
-import { formatReportingPercentage } from "@/features/reporting/lib/formatters";
 import type {
   ReportingProductionEvolutionParams,
   ReportingProductionEvolutionPoint,
@@ -254,14 +250,10 @@ export default function Page() {
   const totals = useMemo(() => {
     const totalCalls = rows.reduce((sum, row) => sum + row.total_calls, 0);
     const totalAppointments = rows.reduce((sum, row) => sum + row.total_appointments, 0);
-    const totalSales = rows.reduce((sum, row) => sum + row.total_sales, 0);
-    const globalConversion = totalCalls > 0 ? (totalSales / totalCalls) * 100 : 0;
 
     return {
       totalCalls,
       totalAppointments,
-      totalSales,
-      globalConversion,
       periodsCount: rows.length,
     };
   }, [rows]);
@@ -358,8 +350,8 @@ export default function Page() {
           <Card className="border border-[#dce6f0] bg-white/95 shadow-none">
             <CardContent className="flex flex-col gap-2 py-4 text-sm text-[#526277] md:flex-row md:items-center md:justify-between">
               <p>
-                Version V1 : évolution agrégée par période. Les ventes, RDV et conversions
-                dépendent des données actuellement présentes en base.
+                Version V1 : évolution agrégée par période centrée sur les appels qualifiés
+                et les rendez-vous remontés par le backend.
               </p>
               <p className="font-medium text-[#102033]">
                 {selectedCampaignName ? `Campagne: ${selectedCampaignName}` : "Toutes les campagnes"}
@@ -371,7 +363,7 @@ export default function Page() {
             <ReportingEmptyState message="Aucune donnée de production disponible sur cette période." />
           ) : (
             <>
-              <KPIGrid className="xl:grid-cols-5">
+              <KPIGrid className="xl:grid-cols-3">
                 <KPICard
                   label="Total appels"
                   value={<CountText value={totals.totalCalls} />}
@@ -385,20 +377,6 @@ export default function Page() {
                   caption="Rendez-vous agrégés retournés par l'API"
                   icon={<CalendarRange className="h-5 w-5" />}
                   tone="blue"
-                />
-                <KPICard
-                  label="Total ventes"
-                  value={<CountText value={totals.totalSales} />}
-                  caption="Ventes confirmées observées"
-                  icon={<TrendingUp className="h-5 w-5" />}
-                  tone="teal"
-                />
-                <KPICard
-                  label="Conversion globale"
-                  value={<PercentText value={totals.globalConversion} />}
-                  caption="Ventes confirmées / appels"
-                  icon={<Target className="h-5 w-5" />}
-                  tone="amber"
                 />
                 <KPICard
                   label="Nombre de périodes"
@@ -423,8 +401,6 @@ export default function Page() {
                         <TableHeadCell>Date</TableHeadCell>
                         <TableHeadCell>Appels</TableHeadCell>
                         <TableHeadCell>RDV</TableHeadCell>
-                        <TableHeadCell>Ventes</TableHeadCell>
-                        <TableHeadCell>Conversion</TableHeadCell>
                       </tr>
                     </thead>
                     <tbody>
@@ -435,8 +411,6 @@ export default function Page() {
                           </TableCell>
                           <TableCell>{row.total_calls}</TableCell>
                           <TableCell>{row.total_appointments}</TableCell>
-                          <TableCell>{row.total_sales}</TableCell>
-                          <TableCell>{formatReportingPercentage(row.conversion_rate)}</TableCell>
                         </tr>
                       ))}
                     </tbody>
