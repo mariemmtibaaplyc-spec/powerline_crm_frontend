@@ -21,6 +21,9 @@ export interface CallResponse {
   phone_number: string;
   campaign_id?: number | null;
   channel_id?: string;
+  // Contact déjà trouvé/rattaché par createManualCall (Lead garanti pour l'agent) —
+  // à utiliser directement plutôt que de refaire une recherche côté frontend.
+  contact?: ContactSearchResult | null;
 }
 
 export interface EndCallBody {

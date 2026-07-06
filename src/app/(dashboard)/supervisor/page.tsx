@@ -699,7 +699,12 @@ export default function Page() {
         ]}
         actions={[
           { label: "Auto refresh 30s" },
-          { label: isRefreshing ? "Actualisation..." : "Donnees reelles", primary: true },
+          {
+            label: isRefreshing ? "Actualisation..." : "Donnees reelles",
+            primary: true,
+            onClick: () => void loadDashboard(true),
+            disabled: isRefreshing,
+          },
         ]}
       />
 
@@ -755,7 +760,7 @@ function HourlyActivityCard({
   const gridRows = axisTicks.slice(0, -1);
 
   return (
-    <div className="relative flex h-full min-h-[430px] flex-col overflow-hidden rounded-[1.8rem] border border-[#dce6f0] bg-white p-5 shadow-[0_14px_34px_rgba(20,32,53,0.06)] sm:p-6">
+    <div className="relative flex h-full min-h-[484px] flex-col overflow-hidden rounded-[1.8rem] border border-[#dce6f0] bg-white p-5 shadow-[0_14px_34px_rgba(20,32,53,0.06)] sm:p-6">
       <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 bg-[radial-gradient(circle,rgba(227,165,109,0.18),transparent_72%)] blur-2xl" />
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -767,13 +772,13 @@ function HourlyActivityCard({
         </div>
       </div>
 
-      <div className="mt-5 grid h-[286px] grid-cols-[40px_1fr] gap-3">
+      <div className="mt-5 grid h-[340px] grid-cols-[40px_1fr] gap-3">
         <div className="flex h-full flex-col justify-between pb-12 pt-1 text-[11px] font-medium text-[#7a8da3]">
           {axisTicks.map((tick) => (
             <span key={`axis-tick-${tick.slot}-${tick.value}`}>{formatNumber(Math.max(tick.value, 0))}</span>
           ))}
         </div>
-        <div className="relative overflow-hidden rounded-[1.6rem] border border-[#e7eef6] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-3 pb-6 pt-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] sm:px-4">
+        <div className="relative overflow-hidden rounded-[1.6rem] border border-[#e7eef6] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-3 pb-6 pt-9 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] sm:px-4">
           <div className="pointer-events-none absolute inset-x-3 top-5 bottom-12 sm:inset-x-4">
             {gridRows.map((tick, index) => (
               <div

@@ -768,56 +768,54 @@ startPause: (pauseCode) => {
   // Appels API en parallèle
   const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
 
-  const [callResult, contacts] = await Promise.allSettled([
-    workspaceApi.startManualCall({
-      agent_id: userId!,
-      phone_number: number,
-      campaign_id: activeCampaignId ?? undefined,
-      agent_extension: sipExtension ?? undefined,
-    }),
-    workspaceApi.searchContactByPhone(number, activeCampaignId ?? undefined),
-  ]);
+  const callResult = await workspaceApi.startManualCall({
+    agent_id: userId!,
+    phone_number: number,
+    campaign_id: activeCampaignId ?? undefined,
+    agent_extension: sipExtension ?? undefined,
+  }).catch((error) => {
+    console.error("[startManualCall] POST /calls failed:", error);
+    return null;
+  });
 
-  // Stocker le call_id Backend
-  if (callResult.status === "fulfilled") {
-    useWorkspaceStore.setState((state) => ({
-      activeCampaignId:
-        typeof callResult.value.campaign_id === "number" && callResult.value.campaign_id > 0
-          ? callResult.value.campaign_id
-          : state.activeCampaignId,
-      currentCallId: callResult.value.id,
-      callSession: {
-        ...state.callSession,
-        backendCallId: callResult.value.id,
-      },
-    }));
-    console.log(
-      `[startManualCall] success userId=${userId} callId=${callResult.value.id} campaignId=${callResult.value.campaign_id ?? activeCampaignId ?? 'none'}`,
-    );
-  } else {
-    console.error("[startManualCall] POST /calls failed:", callResult.reason);
-  }
+  if (!callResult) return;
 
-  // Remplir la fiche si contact trouvé
-  if (contacts.status === "fulfilled" && contacts.value.length > 0) {
-    const c = contacts.value[0];
-    useWorkspaceStore.setState({
-      activeProspect: {
-        id: String(c.id),
-        firstName: c.first_name ?? "",
-        lastName: c.last_name ?? "",
-        phone: c.phone ?? number,
-        phoneSecondary: c.phone2 ?? "",
-        email: c.email ?? "",
-        address: c.address ?? "",
-        postalCode: c.postal_code ?? "",
-        city: c.city ?? "",
-        comments: typeof c.custom_fields?.commentaires === "string"
-          ? c.custom_fields.commentaires
-          : "",
-      },
-    });
-  }
+  // Stocker le call_id Backend, et le contact déjà résolu par createManualCall
+  // (celui-ci garantit un Lead assigné à l'agent — ne pas refaire de recherche
+  // séparée côté frontend, ça désynchroniserait le contact affiché du contact
+  // réellement rattaché à l'appel/lead en base).
+  const c = callResult.contact;
+  useWorkspaceStore.setState((state) => ({
+    activeCampaignId:
+      typeof callResult.campaign_id === "number" && callResult.campaign_id > 0
+        ? callResult.campaign_id
+        : state.activeCampaignId,
+    currentCallId: callResult.id,
+    activeProspect: c
+      ? {
+          id: String(c.id),
+          firstName: c.first_name ?? "",
+          lastName: c.last_name ?? "",
+          phone: c.phone ?? number,
+          phoneSecondary: c.phone2 ?? "",
+          email: c.email ?? "",
+          address: c.address ?? "",
+          postalCode: c.postal_code ?? "",
+          city: c.city ?? "",
+          comments: typeof c.custom_fields?.commentaires === "string"
+            ? c.custom_fields.commentaires
+            : "",
+        }
+      : state.activeProspect,
+    callSession: {
+      ...state.callSession,
+      backendCallId: callResult.id,
+      backendContactId: c?.id ?? state.callSession.backendContactId,
+    },
+  }));
+  console.log(
+    `[startManualCall] success userId=${userId} callId=${callResult.id} campaignId=${callResult.campaign_id ?? activeCampaignId ?? 'none'}`,
+  );
 },
 
   openReminderCall: (entry) =>

@@ -6,6 +6,8 @@ interface FilterItem {
 interface ActionItem {
   label: string;
   primary?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
 }
 
 interface ReportingFiltersProps {
@@ -40,19 +42,26 @@ export function ReportingFilters({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              className={
-                action.primary
-                  ? "inline-flex items-center rounded-full bg-[linear-gradient(135deg,#163a66_0%,#2450a6_100%)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_14px_28px_rgba(36,80,166,0.18)] transition hover:shadow-[0_16px_30px_rgba(227,165,109,0.16)]"
-                  : "inline-flex items-center rounded-full border border-[#f0b57d]/26 bg-[#fffaf4] px-4 py-2.5 text-sm font-medium text-[#7d4f26] transition hover:bg-[#fff5eb]"
-              }
-            >
-              {action.label}
-            </button>
-          ))}
+          {actions.map((action) => {
+            const isInteractive = Boolean(action.onClick);
+            return (
+              <button
+                key={action.label}
+                type="button"
+                onClick={action.onClick}
+                disabled={action.disabled || !isInteractive}
+                title={isInteractive ? undefined : "Indicatif — se met a jour automatiquement"}
+                className={
+                  (action.primary
+                    ? "inline-flex items-center rounded-full bg-[linear-gradient(135deg,#163a66_0%,#2450a6_100%)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_14px_28px_rgba(36,80,166,0.18)] transition hover:shadow-[0_16px_30px_rgba(227,165,109,0.16)]"
+                    : "inline-flex items-center rounded-full border border-[#f0b57d]/26 bg-[#fffaf4] px-4 py-2.5 text-sm font-medium text-[#7d4f26] transition hover:bg-[#fff5eb]") +
+                  (isInteractive ? "" : " cursor-default opacity-80 hover:shadow-none")
+                }
+              >
+                {action.label}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
