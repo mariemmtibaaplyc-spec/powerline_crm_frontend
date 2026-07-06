@@ -13,8 +13,10 @@ import type { SalesAppointmentRecord } from "@/types/appointment.types";
 
 export function SalesTable({
   items,
+  basePath = "/admin/sales",
 }: {
   items: SalesAppointmentRecord[];
+  basePath?: string;
 }) {
   return (
     <TableWrapper className="border-[#dce6f0] bg-white shadow-[0_18px_42px_rgba(20,32,53,0.08)]">
@@ -67,7 +69,7 @@ export function SalesTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <Link
-                    href={`/admin/sales/${item.id}`}
+                    href={`${basePath}/${item.id}`}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#dce6f0] bg-white text-[#295086] shadow-[0_10px_20px_rgba(20,32,53,0.05)] transition hover:-translate-y-0.5 hover:bg-[#f7fbff]"
                     aria-label={`Voir le RDV ${item.clientName}`}
                   >

@@ -522,6 +522,20 @@ export default function Page() {
           ["qualification_seconds", "wrap_up_seconds", "wrapup_seconds"],
           0,
         );
+        const hasProductionMetrics = [
+          "communication_seconds",
+          "waiting_seconds",
+          "pause_seconds",
+          "qualification_seconds",
+          "talk_time_seconds",
+          "connected_duration_seconds",
+          "wait_seconds",
+          "ringing_seconds",
+          "queue_waiting_seconds",
+          "paused_seconds",
+          "wrap_up_seconds",
+          "wrapup_seconds",
+        ].some((key) => campaignSource[key] !== undefined && campaignSource[key] !== null);
 
         return {
           id: campaign.campaign_id,
@@ -548,6 +562,7 @@ export default function Page() {
           communicationWaitingSeconds: communicationSeconds + waitingSeconds,
           pauseSeconds,
           qualificationSeconds,
+          hasProductionMetrics,
         };
       });
 
@@ -789,41 +804,43 @@ function HourlyActivityCard({
             ))}
           </div>
           {rows.length > 0 ? (
-            <div className="relative flex h-full items-end gap-2.5">
-              {rows.map((item) => (
-                <div key={`hour-${item.slot}-calls-rdv`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                  <div className="rounded-full bg-white/80 px-2 py-1 text-center shadow-[0_10px_18px_rgba(20,32,53,0.05)]">
-                    <p className="text-sm font-semibold leading-none text-[#2a67c7]">{formatNumber(item.calls)}</p>
-                    <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#1aa08e]">
-                      {formatNumber(item.appointments)} RDV
-                    </p>
+            <div className="relative h-full w-full overflow-hidden">
+              <div className="flex h-full w-[114%] origin-top-left scale-[0.88] items-end gap-2.5 pt-2">
+                {rows.map((item) => (
+                  <div key={`hour-${item.slot}-calls-rdv`} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+                    <div className="rounded-full bg-white/80 px-2 py-1 text-center shadow-[0_10px_18px_rgba(20,32,53,0.05)]">
+                      <p className="text-xs font-semibold leading-none text-[#2a67c7] sm:text-sm">{formatNumber(item.calls)}</p>
+                      <p className="mt-1 text-[9px] font-medium uppercase tracking-[0.12em] text-[#1aa08e] sm:text-[10px]">
+                        {formatNumber(item.appointments)} RDV
+                      </p>
+                    </div>
+                    <div className="flex h-[156px] items-end gap-2 sm:h-[164px]">
+                      <div
+                        className="w-[22px] rounded-t-[1rem] bg-[linear-gradient(180deg,#5aa7ff_0%,#1e5bbb_100%)] shadow-[0_14px_26px_rgba(33,90,180,0.18)] sm:w-[24px]"
+                        style={{
+                          height: `${Math.max(
+                            safeDivide(item.calls, chartMax, 0) * 100,
+                            toNumber(item.calls, 0) > 0 ? 8 : 0,
+                          )}%`,
+                        }}
+                      />
+                      <div
+                        className="w-[22px] rounded-t-[1rem] bg-[linear-gradient(180deg,#63dbc7_0%,#17a08d_100%)] shadow-[0_14px_26px_rgba(23,160,141,0.16)] sm:w-[24px]"
+                        style={{
+                          height: `${Math.max(
+                            safeDivide(item.appointments, chartMax, 0) * 100,
+                            toNumber(item.appointments, 0) > 0 ? 8 : 0,
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-[#20344b]">{item.label}</p>
+                      <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#7a8da3]">Appels / RDV</p>
+                    </div>
                   </div>
-                  <div className="flex h-[180px] items-end gap-2">
-                    <div
-                      className="w-[22px] rounded-t-[1rem] bg-[linear-gradient(180deg,#5aa7ff_0%,#1e5bbb_100%)] shadow-[0_14px_26px_rgba(33,90,180,0.18)] sm:w-[24px]"
-                      style={{
-                        height: `${Math.max(
-                          safeDivide(item.calls, chartMax, 0) * 100,
-                          toNumber(item.calls, 0) > 0 ? 8 : 0,
-                        )}%`,
-                      }}
-                    />
-                    <div
-                      className="w-[22px] rounded-t-[1rem] bg-[linear-gradient(180deg,#63dbc7_0%,#17a08d_100%)] shadow-[0_14px_26px_rgba(23,160,141,0.16)] sm:w-[24px]"
-                      style={{
-                        height: `${Math.max(
-                          safeDivide(item.appointments, chartMax, 0) * 100,
-                          toNumber(item.appointments, 0) > 0 ? 8 : 0,
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-semibold text-[#20344b]">{item.label}</p>
-                    <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#7a8da3]">Appels / RDV</p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex h-full w-full items-center justify-center text-sm text-[#607287]">
@@ -869,6 +886,7 @@ function CampaignLiveCard({
     communicationWaitingSeconds: number;
     pauseSeconds: number;
     qualificationSeconds: number;
+    hasProductionMetrics: boolean;
   }>;
 }) {
   const maxAvailable = Math.max(1, ...rows.map((row) => toNumber(row.available, 0)));
@@ -1045,13 +1063,15 @@ function ProductionCampaignCard({
     communicationWaitingSeconds: number;
     pauseSeconds: number;
     qualificationSeconds: number;
+    hasProductionMetrics: boolean;
   }>;
 }) {
   const maxCombined = Math.max(
     1,
     ...rows.map((row) => toNumber(row.communicationWaitingSeconds, 0)),
   );
-  const hasTimedCampaignMetric = rows.some(
+  const hasProductionMetrics = rows.some((row) => row.hasProductionMetrics);
+  const hasTimedCampaignActivity = rows.some(
     (row) =>
       toNumber(row.communicationSeconds, 0) > 0 ||
       toNumber(row.waitingSeconds, 0) > 0 ||
@@ -1074,7 +1094,7 @@ function ProductionCampaignCard({
         </div>
       </div>
 
-      {hasTimedCampaignMetric ? (
+      {hasProductionMetrics ? (
         <div className="mt-5 grid gap-3 md:grid-cols-5">
           {rows.map((row) => (
             <div
@@ -1096,7 +1116,10 @@ function ProductionCampaignCard({
                   }}
                 />
               </div>
-              <p className="mt-3 text-xs text-[#607287]">{formatNumber(row.agentsInCall)} agents</p>
+              <div className="mt-3 space-y-1 text-xs text-[#607287]">
+                <p>{formatNumber(row.agentsInCall)} agents</p>
+                <p>Comm. {formatDuration(row.communicationSeconds)} · Attente {formatDuration(row.waitingSeconds)}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -1113,14 +1136,22 @@ function ProductionCampaignCard({
         </div>
       )}
 
+      {hasProductionMetrics && !hasTimedCampaignActivity ? (
+        <div className="mt-4 rounded-[1.2rem] border border-[#edf2f7] bg-[#fbfdff] px-4 py-3 text-sm text-[#607287]">
+          Les campagnes sont bien connectees. Aucune duree de production n a encore ete remontee sur la plage du jour.
+        </div>
+      ) : null}
+
       <div className="mt-5 overflow-hidden rounded-[1.45rem] border border-[#edf2f7] bg-white shadow-[0_12px_28px_rgba(20,32,53,0.05)]">
         <table className="w-full text-left text-sm">
           <thead className="bg-[#f7fbff]">
             <tr>
-              {["Campagne", "Agents", "Communication / attente", "Pause", "Qualification"].map((label) => (
+              {["Campagne", "Agents", "Communication", "Attente", "Pause", "Qualification"].map((label) => (
                 <th
                   key={label}
-                  className="border-b border-[#edf2f7] px-4 py-3 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6c7f93]"
+                  className={`border-b border-[#edf2f7] px-4 py-3 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6c7f93] ${
+                    label === "Campagne" ? "" : "text-right"
+                  }`}
                 >
                   {label}
                 </th>
@@ -1130,27 +1161,48 @@ function ProductionCampaignCard({
           <tbody>
             {rows.length > 0 ? (
               rows.map((row) => (
-                <tr key={`campaign-production-table-${row.id}-${row.campaign}`}>
+                <tr
+                  key={`campaign-production-table-${row.id}-${row.campaign}`}
+                  className="transition-colors hover:bg-[#fbfdff]"
+                >
                   <td className="border-b border-[#edf2f7] px-4 py-3 font-medium text-[#17304a]">
-                    {row.campaign}
+                    <div>
+                      <p className="font-medium text-[#17304a]">{row.campaign}</p>
+                      <p className="mt-1 text-xs text-[#7a8da3]">
+                        Total production {formatDuration(row.communicationWaitingSeconds)}
+                      </p>
+                    </div>
                   </td>
-                  <td className="border-b border-[#edf2f7] px-4 py-3 text-[#24415d]">
-                    {formatNumber(row.agentsInCall)}
+                  <td className="border-b border-[#edf2f7] px-4 py-3 text-right text-[#24415d]">
+                    <span className="inline-flex min-w-[56px] items-center justify-center rounded-full bg-[#f5f9fd] px-3 py-1 text-xs font-semibold text-[#42576d]">
+                      {formatNumber(row.agentsInCall)}
+                    </span>
                   </td>
-                  <td className="border-b border-[#edf2f7] px-4 py-3 font-semibold text-[#17304a]">
-                    {formatDuration(row.communicationWaitingSeconds)}
+                  <td className="border-b border-[#edf2f7] px-4 py-3 text-right font-semibold text-[#17304a]">
+                    <span className="inline-flex min-w-[78px] items-center justify-center rounded-full bg-[#eef4ff] px-3 py-1 text-xs font-semibold text-[#295086]">
+                      {formatDuration(row.communicationSeconds)}
+                    </span>
                   </td>
-                  <td className="border-b border-[#edf2f7] px-4 py-3 text-[#24415d]">
-                    {formatDuration(row.pauseSeconds)}
+                  <td className="border-b border-[#edf2f7] px-4 py-3 text-right text-[#24415d]">
+                    <span className="inline-flex min-w-[78px] items-center justify-center rounded-full bg-[#f7faff] px-3 py-1 text-xs font-medium text-[#4f6478]">
+                      {formatDuration(row.waitingSeconds)}
+                    </span>
                   </td>
-                  <td className="border-b border-[#edf2f7] px-4 py-3 text-[#24415d]">
-                    {formatDuration(row.qualificationSeconds)}
+                  <td className="border-b border-[#edf2f7] px-4 py-3 text-right text-[#24415d]">
+                    <span className="inline-flex min-w-[78px] items-center justify-center rounded-full bg-[#fff6ea] px-3 py-1 text-xs font-medium text-[#9a622e]">
+                      {formatDuration(row.pauseSeconds)}
+                    </span>
+                  </td>
+                  <td className="border-b border-[#edf2f7] px-4 py-3 text-right text-[#24415d]">
+                    <span className="inline-flex min-w-[78px] items-center justify-center rounded-full bg-[#edf8f4] px-3 py-1 text-xs font-medium text-[#0f6a66]">
+                      {formatDuration(row.qualificationSeconds)}
+                    </span>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[#607287]">
+                <td colSpan={6} className="px-4 py-8 text-center text-[#607287]">
                   Aucune campagne active disponible.
                 </td>
               </tr>

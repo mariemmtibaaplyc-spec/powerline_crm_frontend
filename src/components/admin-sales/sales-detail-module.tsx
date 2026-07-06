@@ -8,8 +8,14 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAdminSaleDetail } from "@/features/admin-sales/hooks/use-admin-sales";
 
-export function SalesDetailModule({ saleId }: { saleId: string }) {
-  const { appointment, loading, error } = useAdminSaleDetail(saleId);
+export function SalesDetailModule({
+  saleId,
+  workspace = "admin",
+}: {
+  saleId: string;
+  workspace?: "admin" | "supervisor";
+}) {
+  const { appointment, loading, error } = useAdminSaleDetail(saleId, workspace);
 
   if (!loading && !appointment && !error) {
     notFound();
@@ -18,12 +24,12 @@ export function SalesDetailModule({ saleId }: { saleId: string }) {
   return (
     <section className="space-y-6">
       <PageHeader
-        eyebrow="Administration CRM"
+        eyebrow={workspace === "supervisor" ? "Supervisor CRM" : "Administration CRM"}
         title="Detail rendez-vous"
         description="Lecture detaillee d'un rendez-vous backend, avec informations client, agent et campagne reelles."
         actions={
           <Link
-            href="/admin/sales"
+            href={workspace === "supervisor" ? "/supervisor/sales" : "/admin/sales"}
             className="inline-flex h-11 items-center justify-center rounded-full border border-[#dce6f0] bg-white px-5 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:-translate-y-0.5 hover:bg-[#f8fbff]"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
