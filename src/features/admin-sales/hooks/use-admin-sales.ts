@@ -248,7 +248,10 @@ async function fetchAllAppointments(filters: UseAdminSalesFilters) {
   return dedupeById(rows, "appointments");
 }
 
-export function useAdminSales(filters: UseAdminSalesFilters) {
+export function useAdminSales(
+  filters: UseAdminSalesFilters,
+  workspace: "admin" | "supervisor" = "admin",
+) {
   const [appointments, setAppointments] = useState<SalesAppointmentRecord[]>([]);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
@@ -260,10 +263,11 @@ export function useAdminSales(filters: UseAdminSalesFilters) {
 
     async function loadOptions() {
       try {
-        const [nextUsers, nextCampaigns] = await Promise.all([
-          usersApi.getUsers(),
-          campaignsApi.getCampaigns(),
-        ]);
+        const [nextUsers, nextCampaigns] = await Promise.all(
+          workspace === "supervisor"
+            ? [Promise.resolve([] as UserRecord[]), campaignsApi.getCampaigns()]
+            : [usersApi.getUsers(), campaignsApi.getCampaigns()],
+        );
 
         if (!active) {
           return;
@@ -289,7 +293,7 @@ export function useAdminSales(filters: UseAdminSalesFilters) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [workspace]);
 
   const usersById = useMemo(
     () => new Map(users.map((user) => [user.id, user])),
@@ -342,13 +346,29 @@ export function useAdminSales(filters: UseAdminSalesFilters) {
 
   return {
     salesAppointments: appointments,
-    agents: users
-      .map((user) => ({
-        id: user.id,
-        label: `${user.firstName} ${user.lastName}`.trim() || user.username,
-        team: user.team,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label)),
+    agents:
+      workspace === "supervisor"
+        ? Array.from(
+            appointments.reduce((map, item) => {
+              if (!map.has(item.agentId)) {
+                map.set(item.agentId, {
+                  id: item.agentId,
+                  label: item.agentName,
+                  team: item.team,
+                });
+              }
+              return map;
+            }, new Map<string, { id: string; label: string; team: string }>()),
+          )
+            .map(([, value]) => value)
+            .sort((left, right) => left.label.localeCompare(right.label))
+        : users
+            .map((user) => ({
+              id: user.id,
+              label: `${user.firstName} ${user.lastName}`.trim() || user.username,
+              team: user.team,
+            }))
+            .sort((left, right) => left.label.localeCompare(right.label)),
     campaigns: campaigns
       .map((campaign) => ({
         id: campaign.id,
@@ -360,7 +380,10 @@ export function useAdminSales(filters: UseAdminSalesFilters) {
   };
 }
 
-export function useAdminSaleDetail(saleId: string) {
+export function useAdminSaleDetail(
+  saleId: string,
+  workspace: "admin" | "supervisor" = "admin",
+) {
   const [appointment, setAppointment] = useState<SalesAppointmentRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -373,9 +396,9 @@ export function useAdminSaleDetail(saleId: string) {
       setError(null);
 
       try {
-        const [users, { data }] = await Promise.all([
-          usersApi.getUsers(),
+        const [{ data }, users] = await Promise.all([
           apiClient.get<BackendAppointment>(`/appointments/${saleId}`),
+          workspace === "supervisor" ? Promise.resolve([] as UserRecord[]) : usersApi.getUsers(),
         ]);
 
         if (!active) {
@@ -407,7 +430,7 @@ export function useAdminSaleDetail(saleId: string) {
     return () => {
       active = false;
     };
-  }, [saleId]);
+  }, [saleId, workspace]);
 
   return {
     appointment,

@@ -9,6 +9,10 @@ import type {
   ReportingAppointmentsPerAgentData,
   ReportingAppointmentsPerAgentResponse,
   ReportingContactReachabilityData,
+  ReportingContactReachabilityByListItem,
+  ReportingContactReachabilityByQualificationItem,
+  ReportingContactReachabilityContactsData,
+  ReportingContactReachabilityTimelineItem,
   ReportingProductionEvolutionParams,
   ReportingProductionEvolutionPoint,
   ReportingCallsOverviewData,
@@ -41,6 +45,30 @@ type BackendReportingContactReachabilityResponse =
   | ReportingContactReachabilityData
   | {
       data?: ReportingContactReachabilityData;
+    };
+
+type BackendReportingContactReachabilityByListResponse =
+  | ReportingContactReachabilityByListItem[]
+  | {
+      data?: ReportingContactReachabilityByListItem[];
+    };
+
+type BackendReportingContactReachabilityByQualificationResponse =
+  | ReportingContactReachabilityByQualificationItem[]
+  | {
+      data?: ReportingContactReachabilityByQualificationItem[];
+    };
+
+type BackendReportingContactReachabilityTimelineResponse =
+  | ReportingContactReachabilityTimelineItem[]
+  | {
+      data?: ReportingContactReachabilityTimelineItem[];
+    };
+
+type BackendReportingContactReachabilityContactsResponse =
+  | ReportingContactReachabilityContactsData
+  | {
+      data?: ReportingContactReachabilityContactsData;
     };
 
 type BackendReportingProductionEvolutionResponse =
@@ -117,9 +145,18 @@ type BackendReportingQualificationsByAgentResponse =
 
 function sanitizeDashboardParams(params: ReportingDashboardParams) {
   return Object.fromEntries(
-    Object.entries(params).filter((entry): entry is [string, string] => {
+    Object.entries(params).filter((entry): entry is [string, string | number] => {
       const value = entry[1];
-      return typeof value === "string" && value.trim().length > 0;
+
+      if (typeof value === "string") {
+        return value.trim().length > 0;
+      }
+
+      if (typeof value === "number") {
+        return Number.isFinite(value) && value > 0;
+      }
+
+      return false;
     }),
   );
 }
@@ -152,6 +189,63 @@ function extractContactReachabilityData(
   }
 
   return response as ReportingContactReachabilityData;
+}
+
+function extractContactReachabilityByListData(
+  response: BackendReportingContactReachabilityByListResponse,
+): ReportingContactReachabilityByListItem[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if ("data" in response && Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return [];
+}
+
+function extractContactReachabilityByQualificationData(
+  response: BackendReportingContactReachabilityByQualificationResponse,
+): ReportingContactReachabilityByQualificationItem[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if ("data" in response && Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return [];
+}
+
+function extractContactReachabilityTimelineData(
+  response: BackendReportingContactReachabilityTimelineResponse,
+): ReportingContactReachabilityTimelineItem[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if ("data" in response && Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return [];
+}
+
+function extractContactReachabilityContactsData(
+  response: BackendReportingContactReachabilityContactsResponse,
+): ReportingContactReachabilityContactsData {
+  if (
+    "data" in response &&
+    response.data &&
+    typeof response.data === "object" &&
+    !Array.isArray(response.data)
+  ) {
+    return response.data;
+  }
+
+  return response as ReportingContactReachabilityContactsData;
 }
 
 function extractProductionEvolutionData(
@@ -444,6 +538,90 @@ export const reportingApi = {
       throw toReportingError(
         error,
         "Impossible de charger la joignabilite des contacts pour le moment.",
+      );
+    }
+  },
+
+  async getContactReachabilityByList(
+    params: ReportingDashboardParams = {},
+  ): Promise<ReportingContactReachabilityByListItem[]> {
+    try {
+      const { data } = await apiClient.get<BackendReportingContactReachabilityByListResponse>(
+        "/reporting/contact-reachability/by-list",
+        {
+          params: sanitizeDashboardParams(params),
+        },
+      );
+
+      return extractContactReachabilityByListData(data);
+    } catch (error) {
+      throw toReportingError(
+        error,
+        "Impossible de charger la joignabilite par liste pour le moment.",
+      );
+    }
+  },
+
+  async getContactReachabilityByQualification(
+    params: ReportingDashboardParams = {},
+  ): Promise<ReportingContactReachabilityByQualificationItem[]> {
+    try {
+      const { data } = await apiClient.get<BackendReportingContactReachabilityByQualificationResponse>(
+        "/reporting/contact-reachability/by-qualification",
+        {
+          params: sanitizeDashboardParams(params),
+        },
+      );
+
+      return extractContactReachabilityByQualificationData(data);
+    } catch (error) {
+      throw toReportingError(
+        error,
+        "Impossible de charger la joignabilite par qualification pour le moment.",
+      );
+    }
+  },
+
+  async getContactReachabilityTimeline(
+    params: ReportingDashboardParams = {},
+  ): Promise<ReportingContactReachabilityTimelineItem[]> {
+    try {
+      const { data } = await apiClient.get<BackendReportingContactReachabilityTimelineResponse>(
+        "/reporting/contact-reachability/timeline",
+        {
+          params: sanitizeDashboardParams(params),
+        },
+      );
+
+      return extractContactReachabilityTimelineData(data);
+    } catch (error) {
+      throw toReportingError(
+        error,
+        "Impossible de charger la timeline de joignabilite pour le moment.",
+      );
+    }
+  },
+
+  async getContactReachabilityContacts(
+    params: ReportingDashboardParams = {},
+  ): Promise<ReportingContactReachabilityContactsData> {
+    try {
+      const { data } = await apiClient.get<BackendReportingContactReachabilityContactsResponse>(
+        "/reporting/contact-reachability/contacts",
+        {
+          params: {
+            ...sanitizeDashboardParams(params),
+            page: params.page ?? 1,
+            limit: params.limit ?? 10,
+          },
+        },
+      );
+
+      return extractContactReachabilityContactsData(data);
+    } catch (error) {
+      throw toReportingError(
+        error,
+        "Impossible de charger le detail contacts de joignabilite pour le moment.",
       );
     }
   },

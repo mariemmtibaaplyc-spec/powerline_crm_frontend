@@ -47,7 +47,11 @@ function formatDisplayMonth(value: string) {
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
-export function SalesModule() {
+export function SalesModule({
+  workspace = "admin",
+}: {
+  workspace?: "admin" | "supervisor";
+}) {
   const today = formatToday();
   const currentMonth = formatCurrentMonth();
   const [periodMode, setPeriodMode] = useState<"day" | "month">("day");
@@ -71,7 +75,7 @@ export function SalesModule() {
     [agentFilter, campaignFilter, periodMode, selectedDate, selectedMonth, statusFilter],
   );
 
-  const { salesAppointments, agents, campaigns, loading, error } = useAdminSales(apiFilters);
+  const { salesAppointments, agents, campaigns, loading, error } = useAdminSales(apiFilters, workspace);
 
   const teams = useMemo(
     () => Array.from(new Set(agents.map((item) => item.team))).sort((left, right) => left.localeCompare(right)),
@@ -302,7 +306,10 @@ export function SalesModule() {
                   {error}
                 </div>
               ) : (
-                <SalesTable items={filteredAppointments} />
+                <SalesTable
+                  items={filteredAppointments}
+                  basePath={workspace === "supervisor" ? "/supervisor/sales" : "/admin/sales"}
+                />
               )}
             </div>
 

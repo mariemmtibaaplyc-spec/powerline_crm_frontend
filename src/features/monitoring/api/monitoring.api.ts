@@ -95,6 +95,10 @@ export interface SupervisionCampaignLiveStat {
   contacts_available: number;
   dialer_speed: number;
   dialer_speed_mode: string;
+  communication_seconds?: number;
+  waiting_seconds?: number;
+  pause_seconds?: number;
+  qualification_seconds?: number;
   timestamp: string;
 }
 

@@ -133,7 +133,22 @@ const supervisorSections: NavSection[] = [
         href: "/supervisor/recordings",
         icon: Headphones,
       },
-      { label: "Rapports", href: "/supervisor/reporting", icon: BarChart3 },
+      {
+        label: "Rapports",
+        icon: BarChart3,
+        children: [
+          { label: "Vue globale", href: "/supervisor/reporting" },
+          { label: "Productivite des agents", href: "/supervisor/reporting/agent-productivity" },
+          { label: "Evolution de la prod", href: "/supervisor/reporting/production-evolution" },
+          { label: "Statistiques DMC/DMT", href: "/supervisor/reporting/dmc-dmt" },
+          { label: "Etat des qualifications", href: "/supervisor/reporting/qualification-status" },
+          { label: "Qualification par agent", href: "/supervisor/reporting/qualification-by-agent" },
+          { label: "Resultat des agents", href: "/supervisor/reporting/agent-results" },
+          { label: "Historique des sessions", href: "/supervisor/reporting/session-history" },
+          { label: "Joignabilite des contacts", href: "/supervisor/reporting/contact-reachability" },
+          { label: "Rapport des pauses", href: "/supervisor/reporting/breaks-report" },
+        ],
+      },
     ],
   },
   {

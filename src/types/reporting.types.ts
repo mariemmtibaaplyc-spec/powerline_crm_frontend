@@ -12,14 +12,82 @@ export interface ReportingDashboardParams {
   to?: string;
   agent_id?: string;
   campaign_id?: string;
+  page?: number;
+  limit?: number;
 }
 
 export interface ReportingContactReachabilityData {
   reachable_contacts: number;
   unreachable_contacts: number;
   total_contacts: number;
+  attempted_contacts?: number;
+  never_called_contacts?: number;
   retry_count: number;
+  avg_attempts_per_contact?: number;
   reachability_rate: number;
+}
+
+export interface ReportingContactReachabilityByListItem {
+  list_id: number;
+  list_name: string;
+  reachable_contacts: number;
+  unreachable_contacts: number;
+  attempted_contacts: number;
+  never_called_contacts: number;
+  total_contacts: number;
+  total_calls: number;
+  avg_attempts_per_contact: number;
+  reachability_rate: number;
+}
+
+export interface ReportingContactReachabilityByQualificationItem {
+  qualification_id: number | null;
+  qualification_name: string;
+  reachable_contacts: number;
+  unreachable_contacts: number;
+  total_contacts: number;
+  total_calls: number;
+  avg_attempts_per_contact: number;
+  reachability_rate: number;
+}
+
+export interface ReportingContactReachabilityTimelineItem {
+  date: string;
+  attempted_contacts: number;
+  reachable_contacts: number;
+  unreachable_contacts: number;
+  total_calls: number;
+  avg_attempts_per_contact: number;
+  reachability_rate: number;
+}
+
+export interface ReportingContactReachabilityContactItem {
+  contact_id: number;
+  contact_name: string;
+  phone: string | null;
+  attempts_count: number;
+  is_reachable: boolean;
+  never_called: boolean;
+  last_call_at: string | null;
+  last_call_status: string | null;
+  last_qualification_id: number | null;
+  last_qualification_name: string | null;
+  last_campaign_id: number | null;
+  last_campaign_name: string | null;
+  lists: Array<{
+    list_id: number;
+    list_name: string;
+  }>;
+}
+
+export interface ReportingContactReachabilityContactsData {
+  data: ReportingContactReachabilityContactItem[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+  };
 }
 
 export interface ReportingProductionEvolutionParams
