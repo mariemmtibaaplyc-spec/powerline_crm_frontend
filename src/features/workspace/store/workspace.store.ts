@@ -7,7 +7,6 @@ import {
 } from "@/features/workspace/mocks/agent.mock";
 import { formatInputDate } from "@/features/workspace/mocks/mock.utils";
 import { createUnknownManualCallProspect } from "@/features/workspace/mocks/prospects.mock";
-import { createMockReminders } from "@/features/workspace/mocks/reminders.mock";
 import type {
   ActivePause,
   AgentIdentity,
@@ -34,12 +33,27 @@ interface BackendQualification {
   is_active: boolean;
 }
 
+/** Notification "rappel dû" — alimentée directement par le payload WS
+ *  reminder.due (voir use-workspace-socket.ts), affichée en toast topbar. */
+export interface DueReminderToast {
+  id: string;
+  reminderId: number;
+  contactName: string | null;
+  phone: string;
+  notes: string | null;
+}
+
 function buildReminderDraftNote(values: ReminderFormValues) {
   const schedule = `${values.date} ${values.time}`;
   const note = values.note.trim();
   return note
     ? `[RAPPEL ${schedule}] ${note}`
     : `[RAPPEL ${schedule}]`;
+}
+
+/** Combine date+time du formulaire rappel en ISO local, pour Reminder.scheduled_at backend. */
+function buildReminderScheduledAtIso(values: ReminderFormValues): string {
+  return `${values.date}T${values.time}:00`;
 }
 
 // ── Interface store ─────────────────────────────────────────────────────────
@@ -63,6 +77,9 @@ interface AgentWorkspaceStoreState {
   appointments: AppointmentEntry[];
   reminders: Reminder[];
   historyEntries: HistoryEntry[];
+  // Notifications "rappel dû" — alimentées par l'event WS reminder.due
+  // (voir use-workspace-socket.ts), consommées par la topbar agent.
+  dueReminderToasts: DueReminderToast[];
 
   // ── State AJOUT Backend ───────────────────────────────────────────────────
   appointmentError: string | null; // null = pas d'erreur, string = message à afficher dans la modale
@@ -115,6 +132,9 @@ interface AgentWorkspaceStoreState {
 
   fetchHistory: (date: string) => Promise<void>;
   fetchAppointments: (date?: string) => Promise<void>;
+  fetchReminders: () => Promise<void>;
+  pushDueReminderToast: (toast: DueReminderToast) => void;
+  dismissDueReminderToast: (id: string) => void;
   fetchDailyStats: () => Promise<void>;
   dismissAppointmentError: () => void;
 
@@ -198,7 +218,8 @@ function createInitialState() {
     lastQualification: null as QualificationRecord | null,
     pendingQualificationNextStatus: null as "paused" | "waiting" | null,
     appointments: [] as AppointmentEntry[],
-    reminders: createMockReminders(today),
+    reminders: [] as Reminder[],
+    dueReminderToasts: [] as DueReminderToast[],
     historyEntries: [] as HistoryEntry[],
   };
 }
@@ -594,10 +615,19 @@ startPause: (pauseCode) => {
     const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
     let appointmentFailed = false;
     try {
+      // reminder: {scheduled_at, notes} — auparavant seul un texte libre était
+      // envoyé dans `notes` ; le backend (EndCallUseCase) ne persistait donc
+      // jamais de Reminder structuré. Le backend est la source de vérité :
+      // il rejette ce champ si la qualification n'est pas de type RAPPEL
+      // (voir _createFollowUpIfNeeded), donc aucun risque de double-emploi.
       await workspaceApi.endCall(callId, {
         qualification_id: selectedQualificationId ?? undefined,
         require_qualification: true,
         notes: buildReminderDraftNote(values),
+        reminder: {
+          scheduled_at: buildReminderScheduledAtIso(values),
+          notes: values.note.trim() || undefined,
+        },
       });
     } catch (err) {
       console.error("[submitReminderQualification] endCall failed:", err);
@@ -616,8 +646,9 @@ startPause: (pauseCode) => {
       }).catch((err: any) => console.error("[ResumePredictive] setAvailable failed:", err?.message));
     }
 
-    // Refetch historique
+    // Refetch historique + rappels (le nouveau Reminder doit apparaître dans "mes rappels")
     useWorkspaceStore.getState().fetchHistory(formatInputDate(new Date())).catch(() => {});
+    useWorkspaceStore.getState().fetchReminders().catch(() => {});
   }
 
   set((state) => ({
@@ -818,35 +849,107 @@ startPause: (pauseCode) => {
   );
 },
 
-  openReminderCall: (entry) =>
-    set((state) => {
-      const startedAt = Date.now();
+  // Rejoue EXACTEMENT la même logique que startManualCall() (même endpoint
+  // POST /calls, même résolution contact côté backend par phone_number) —
+  // avant ce fix, cette action ne faisait que poser un état local optimiste
+  // (agentStatus=ringing, activeProspect=entry.prospect) sans jamais appeler
+  // le backend : callSession.backendCallId/backendContactId restaient donc
+  // null indéfiniment, et un WS agent.status.changed ultérieur (le statut
+  // agent réel côté backend n'avait jamais bougé) repassait agentStatus à
+  // "paused"/"waiting", déclenchant l'affichage "Aucune fiche n'est chargée".
+  // On préserve `direction: "reminder"` et `activeReminderId` tout du long
+  // pour ne pas casser le flux de qualification RAPPEL existant.
+  openReminderCall: async (entry) => {
+    const startedAt = Date.now();
+    const reminderId = "id" in entry ? entry.id : null;
+    const campaignIdHint = "campaignId" in entry ? entry.campaignId ?? undefined : undefined;
+    const leadIdHint = "leadId" in entry ? entry.leadId ?? undefined : undefined;
+
+    set((state) => ({
+      ...state,
+      activeProspect: entry.prospect,
+      agentStatus: "ringing",
+      statusStartedAt: startedAt,
+      qualificationPanelOpen: false,
+      activePause: null,
+      isEndingCall: false,
+      endingCallId: null,
+      currentCallId: null,
+      callSession: {
+        active: true,
+        direction: "reminder",
+        currentNumber: entry.phone,
+        activeReminderId: reminderId,
+        startedAt,
+        hungUpBy: null,
+        campaign: entry.campaign,
+        queue: entry.queue,
+        backendCallId: null,
+        backendContactId: null,
+        backendLeadId: null,
+      },
+    }));
+
+    const { userId, activeCampaignId, sipExtension } = useWorkspaceStore.getState();
+    if (!userId) {
+      console.error("[openReminderCall] userId not set — initFromSession not called?");
+      return;
+    }
+
+    const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+
+    const callResult = await workspaceApi.startManualCall({
+      agent_id:        userId,
+      phone_number:    entry.phone,
+      campaign_id:     campaignIdHint ?? activeCampaignId ?? undefined,
+      lead_id:         leadIdHint,
+      agent_extension: sipExtension ?? undefined,
+    }).catch((error) => {
+      console.error("[openReminderCall] POST /calls failed:", error);
+      return null;
+    });
+
+    if (!callResult) return;
+
+    const c = callResult.contact;
+    useWorkspaceStore.setState((state) => {
+      // Un raccroché/qualification très rapide peut avoir déjà quitté ce
+      // rappel (direction changée) — ne pas réappliquer un vieux résultat.
+      if (state.callSession.activeReminderId !== reminderId) return {};
 
       return {
-        ...state,
-        activeProspect: entry.prospect,
-        agentStatus: "ringing",
-        statusStartedAt: startedAt,
-        qualificationPanelOpen: false,
-        activePause: null,
-        isEndingCall: false,
-        endingCallId: null,
-        currentCallId: null,
+        activeCampaignId:
+          typeof callResult.campaign_id === "number" && callResult.campaign_id > 0
+            ? callResult.campaign_id
+            : state.activeCampaignId,
+        currentCallId: callResult.id,
+        activeProspect: c
+          ? {
+              id: String(c.id),
+              firstName: c.first_name ?? "",
+              lastName: c.last_name ?? "",
+              phone: c.phone ?? entry.phone,
+              phoneSecondary: c.phone2 ?? "",
+              email: c.email ?? "",
+              address: c.address ?? "",
+              postalCode: c.postal_code ?? "",
+              city: c.city ?? "",
+              comments: typeof c.custom_fields?.commentaires === "string"
+                ? c.custom_fields.commentaires
+                : "",
+            }
+          : state.activeProspect,
         callSession: {
-          active: true,
-          direction: "reminder",
-          currentNumber: entry.phone,
-          activeReminderId: entry.id,
-          startedAt,
-          hungUpBy: null,
-          campaign: entry.campaign,
-          queue: entry.queue,
-          backendCallId: null,
-          backendContactId: null,
-          backendLeadId: null,
+          ...state.callSession,
+          backendCallId: callResult.id,
+          backendContactId: c?.id ?? state.callSession.backendContactId,
         },
       };
-    }),
+    });
+    console.log(
+      `[openReminderCall] success userId=${userId} callId=${callResult.id} reminderId=${reminderId ?? 'none'} campaignId=${callResult.campaign_id ?? activeCampaignId ?? 'none'}`,
+    );
+  },
 
   setActiveProspect: (prospect) =>
     set((state) => ({
@@ -955,12 +1058,20 @@ startPause: (pauseCode) => {
 
   fetchHistory: async (date) => {
     const { userId } = useWorkspaceStore.getState();
-    if (!userId) return;
+    // Même garde que fetchAppointments — sans token valide (ex: juste après
+    // logout, où userId reste en mémoire dans ce store), ne pas appeler l'API.
+    if (!userId || !hasValidAuthToken()) return;
     try {
       const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
       const entries = await workspaceApi.getAgentHistory(userId, date);
       set({ historyEntries: entries });
-    } catch (err) {
+    } catch (err: any) {
+      // 401 après logout (race entre le clear des tokens et un fetch déjà en
+      // vol) est attendu et non-bloquant — pas la peine de bruiter la console.
+      // Toute autre erreur (agent bien connecté) reste loggée normalement.
+      if (err?.response?.status === 401 && !hasValidAuthToken()) {
+        return;
+      }
       console.error("[fetchHistory] failed:", err);
     }
   },
@@ -978,6 +1089,35 @@ startPause: (pauseCode) => {
       console.error("[fetchAppointments] failed:", err);
     }
   },
+
+  fetchReminders: async () => {
+    const { userId } = useWorkspaceStore.getState();
+    if (!userId || !hasValidAuthToken()) {
+      console.log(`[fetchReminders] skipped — userId=${userId ?? 'null'} hasValidAuthToken=${hasValidAuthToken()}`);
+      return;
+    }
+    try {
+      const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+      const entries = await workspaceApi.getReminders(userId);
+      console.log(
+        `[fetchReminders] userId=${userId} got ${entries.length} reminder(s) — statuses=${entries.map((e) => e.status).join(',') || 'none'}`,
+      );
+      set({ reminders: entries });
+    } catch (err: any) {
+      if (err?.response?.status === 401) return;
+      console.error("[fetchReminders] failed:", err);
+    }
+  },
+
+  pushDueReminderToast: (toast) =>
+    set((state) => ({
+      dueReminderToasts: [...state.dueReminderToasts, toast],
+    })),
+
+  dismissDueReminderToast: (id) =>
+    set((state) => ({
+      dueReminderToasts: state.dueReminderToasts.filter((t) => t.id !== id),
+    })),
 
   dismissAppointmentError: () => set({ appointmentError: null }),
 

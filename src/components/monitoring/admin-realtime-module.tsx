@@ -2,8 +2,6 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { monitoringApi } from "@/features/monitoring/api/monitoring.api";
-import { useAuthStore } from "@/features/auth/store/auth.store";
-import { useSessionStore } from "@/store/session.store";
 import {
   Activity,
   BellRing,
@@ -26,10 +24,29 @@ import {
 import type { LiveAgentStatus } from "@/types/monitoring.types";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  SupervisorSipPhoneProvider,
+  useSupervisorSipPhone,
+} from "@/features/monitoring/sip/supervisor-sip-phone.provider";
+import { useSupervisorSpySocket } from "@/features/monitoring/hooks/use-supervisor-spy-socket";
 
 export function AdminRealtimeModule() {
+  return (
+    <SupervisorSipPhoneProvider>
+      <AdminRealtimeModuleContent />
+    </SupervisorSipPhoneProvider>
+  );
+}
+
+function AdminRealtimeModuleContent() {
   const { agents, counts, snapshot, trafficMetrics, isLoading, error } = useLiveMonitoring();
   const [showOfflineAgents, setShowOfflineAgents] = useState(false);
+
+  // Softphone superviseur/admin — actif uniquement sur cette page. Arme
+  // l'auto-décroché dès que le backend signale un Originate ChanSpy imminent
+  // (event WS "spy.session.starting", voir SupervisionService.joinCall()).
+  const { triggerAutoAnswer, connectionFailed, retryManually } = useSupervisorSipPhone();
+  useSupervisorSpySocket(triggerAutoAnswer);
 
   const waitingCount = snapshot?.ringing_agents ?? agents.filter((agent) => agent.status === "ringing").length;
   const inCallCount = snapshot?.in_call_agents ?? agents.filter((agent) => agent.status === "in_call").length;
@@ -93,6 +110,23 @@ export function AdminRealtimeModule() {
           </>
         }
       />
+
+      {connectionFailed ? (
+        <Card className="border border-[#f2d5db] bg-[#fff7f9] shadow-[0_18px_42px_rgba(20,32,53,0.08)]">
+          <CardContent className="flex flex-col gap-3 px-6 py-5 text-sm text-[#b54f67] sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              Impossible de se connecter au téléphone. Contactez l&apos;administrateur.
+            </p>
+            <button
+              type="button"
+              onClick={retryManually}
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-full border border-[#d95a78] bg-white px-4 text-xs font-semibold uppercase tracking-[0.1em] text-[#b54f67] transition hover:bg-[#fff0f3]"
+            >
+              Réessayer
+            </button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden border border-[#cfd9e6] bg-white shadow-[0_18px_42px_rgba(20,32,53,0.08)]">
         <CardContent className="space-y-0 p-0">
@@ -298,6 +332,7 @@ function AgentRealtimeRow({
     id: string;
     agentNumericId: number;
     callId: number | null;
+    activeCallStatus: string | null;
     code: string;
     fullName: string;
     team: string;
@@ -314,37 +349,86 @@ function AgentRealtimeRow({
   const rowTone = getRowTone(agent.status, index);
   const statusTone = getStatusTone(agent.status);
 
-  // Extension SIP du superviseur connecte
-  const sessionData = useSessionStore((s) => s.session);
-  const authData = useAuthStore((s) => s.session);
-  const supervisorExt = sessionData?.user?.sip_extension ?? authData?.user?.sip_extension ?? "";
+  // Extension SIP du superviseur résolue côté serveur depuis User.sip_extension
+  // (voir SupervisionService._resolveSupervisorExt) — plus besoin de la lire ni
+  // de la transmettre depuis le frontend.
 
-  const isInCall = (agent.status === "in_call" || agent.status === "ringing") && !!agent.callId;
+  // Basé sur le statut REEL de l'appel (current_call.status), pas sur
+  // AgentStatus. Un appel manuel lancé depuis PAUSED reste ANSWERED côté
+  // téléphonie alors que l'agent reste volontairement PAUSED côté CRM — les
+  // actions de supervision doivent donc rester actives dans ce cas.
+  const isInCall = agent.activeCallStatus === "ANSWERED" && !!agent.callId;
   const callId = agent.callId;
 
-  const handleListen = useCallback(async () => {
-    if (!callId || !supervisorExt) return;
-    try { await monitoringApi.joinCall({ call_id: callId, supervisor_ext: supervisorExt, mode: "listen" }); }
-    catch (e) { console.error("[supervision] listen failed:", e); }
-  }, [callId, supervisorExt]);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const handleWhisper = useCallback(async () => {
-    if (!callId || !supervisorExt) return;
-    try { await monitoringApi.joinCall({ call_id: callId, supervisor_ext: supervisorExt, mode: "whisper" }); }
-    catch (e) { console.error("[supervision] whisper failed:", e); }
-  }, [callId, supervisorExt]);
+  const reportActionFailure = useCallback((action: string, error: unknown) => {
+    console.error(
+      "[supervision-api] join failed",
+      (error as any)?.response?.status,
+      (error as any)?.response?.data,
+    );
+    const message =
+      (error as any)?.response?.data?.message ??
+      (error as any)?.message ??
+      `Action "${action}" impossible.`;
+    setActionError(typeof message === "string" ? message : `Action "${action}" impossible.`);
+    window.setTimeout(() => setActionError(null), 5000);
+  }, []);
 
-  const handleBarge = useCallback(async () => {
-    if (!callId || !supervisorExt) return;
-    try { await monitoringApi.joinCall({ call_id: callId, supervisor_ext: supervisorExt, mode: "barge" }); }
-    catch (e) { console.error("[supervision] barge failed:", e); }
-  }, [callId, supervisorExt]);
+  // Point d'entrée commun des 3 actions "join" (listen/whisper/barge).
+  // supervisor_ext n'est plus envoyé par le frontend — résolu et validé
+  // côté serveur depuis le compte connecté (voir SupervisionService).
+  const runJoinAction = useCallback(
+    async (mode: "listen" | "whisper" | "barge", actionLabel: string) => {
+      console.log("[supervision-click]", mode, {
+        agentId: agent.agentNumericId,
+        callId,
+        activeCallStatus: agent.activeCallStatus,
+      });
+
+      if (!callId || agent.activeCallStatus !== "ANSWERED") {
+        setActionError("Aucun appel en cours (ANSWERED) pour cet agent.");
+        window.setTimeout(() => setActionError(null), 5000);
+        return;
+      }
+
+      console.log("[supervision-api] join", { callId, mode });
+
+      try {
+        await monitoringApi.joinCall({ call_id: callId, mode });
+      } catch (e) {
+        reportActionFailure(actionLabel, e);
+      }
+    },
+    [agent.agentNumericId, agent.activeCallStatus, callId, reportActionFailure],
+  );
+
+  const handleListen = useCallback(() => runJoinAction("listen", "Ecoute"), [runJoinAction]);
+  const handleWhisper = useCallback(() => runJoinAction("whisper", "Chuchotement"), [runJoinAction]);
+  const handleBarge = useCallback(() => runJoinAction("barge", "Intrusion"), [runJoinAction]);
 
   const handleLeave = useCallback(async () => {
-    if (!callId || !supervisorExt) return;
-    try { await monitoringApi.leaveCall({ call_id: callId, supervisor_ext: supervisorExt }); }
-    catch (e) { console.error("[supervision] leave failed:", e); }
-  }, [callId, supervisorExt]);
+    console.log("[supervision-click] leave", {
+      agentId: agent.agentNumericId,
+      callId,
+      activeCallStatus: agent.activeCallStatus,
+    });
+
+    if (!callId) {
+      setActionError("Aucun appel en cours pour cet agent.");
+      window.setTimeout(() => setActionError(null), 5000);
+      return;
+    }
+
+    console.log("[supervision-api] leave", { callId });
+
+    try {
+      await monitoringApi.leaveCall({ call_id: callId });
+    } catch (e) {
+      reportActionFailure("Quitter la supervision", e);
+    }
+  }, [agent.agentNumericId, agent.activeCallStatus, callId, reportActionFailure]);
 
   return (
     <tr className={`${rowTone} border-b border-white/40 text-[#102033]`}>
@@ -373,45 +457,52 @@ function AgentRealtimeRow({
         </div>
       </td>
       <td className="px-3 py-2.5">
-        <div className="flex justify-end gap-1.5">
-          {/* Info agent */}
-          <ActionDot
-            color="bg-[#2d6fcb]"
-            icon="i"
-            title={`${agent.fullName} — ${agent.status}`}
-          />
-          {/* Intrusion barge */}
-          <ActionDot
-            color="bg-[#0f8b6d]"
-            icon="+"
-            title="Intrusion (barge)"
-            disabled={!isInCall}
-            onClick={handleBarge}
-          />
-          {/* Chuchotement whisper */}
-          <ActionDot
-            color="bg-[#f09c43]"
-            icon="T"
-            title="Chuchotement (whisper)"
-            disabled={!isInCall}
-            onClick={handleWhisper}
-          />
-          {/* Ecoute silencieuse */}
-          <ActionDot
-            color="bg-[#6954cc]"
-            icon="Q"
-            title="Ecoute silencieuse (listen)"
-            disabled={!isInCall}
-            onClick={handleListen}
-          />
-          {/* Quitter supervision */}
-          <ActionDot
-            color="bg-[#d95a78]"
-            icon="P"
-            title="Quitter la supervision"
-            disabled={!isInCall}
-            onClick={handleLeave}
-          />
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex justify-end gap-1.5">
+            {/* Info agent */}
+            <ActionDot
+              color="bg-[#2d6fcb]"
+              icon="i"
+              title={`${agent.fullName} — ${agent.status}`}
+            />
+            {/* Intrusion barge */}
+            <ActionDot
+              color="bg-[#0f8b6d]"
+              icon="+"
+              title="Intrusion (barge)"
+              disabled={!isInCall}
+              onClick={handleBarge}
+            />
+            {/* Chuchotement whisper */}
+            <ActionDot
+              color="bg-[#f09c43]"
+              icon="T"
+              title="Chuchotement (whisper)"
+              disabled={!isInCall}
+              onClick={handleWhisper}
+            />
+            {/* Ecoute silencieuse */}
+            <ActionDot
+              color="bg-[#6954cc]"
+              icon="Q"
+              title="Ecoute silencieuse (listen)"
+              disabled={!isInCall}
+              onClick={handleListen}
+            />
+            {/* Quitter supervision */}
+            <ActionDot
+              color="bg-[#d95a78]"
+              icon="P"
+              title="Quitter la supervision"
+              disabled={!isInCall}
+              onClick={handleLeave}
+            />
+          </div>
+          {actionError ? (
+            <p className="max-w-[220px] text-right text-[11px] font-medium text-[#c0455f]">
+              {actionError}
+            </p>
+          ) : null}
         </div>
       </td>
     </tr>

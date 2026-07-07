@@ -228,4 +228,36 @@ export const authApi = {
   async forgotPassword(email: string) {
     return { email, sent: true };
   },
+  /**
+   * Libère la présence agent (active_session_id/session_last_seen) côté backend.
+   * Doit être appelé AVANT de supprimer le token local, sinon l'intercepteur
+   * axios n'a plus rien à envoyer dans l'Authorization header et le backend ne
+   * peut pas savoir quelle session libérer — l'agent resterait bloqué en cas
+   * de reconnexion immédiate ("compte déjà utilisé sur un autre poste").
+   *
+   * `token` est passé explicitement (capturé par l'appelant AVANT tout clear
+   * de store/localStorage) et injecté directement dans le header — on ne
+   * dépend plus uniquement de l'intercepteur axios, qui lit son token depuis
+   * les stores/localStorage au moment de l'envoi et peut donc rater la
+   * fenêtre si un autre appelant a déjà commencé à nettoyer l'état.
+   *
+   * Échec silencieux (token déjà expiré/absent) : le logout front continue —
+   * mais on logge la cause pour diagnostiquer un éventuel 401 inattendu.
+   */
+  async logout(token?: string | null): Promise<void> {
+    try {
+      await apiClient.post(
+        "/auth/logout",
+        {},
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+      );
+    } catch (err: any) {
+      const status = err?.response?.status;
+      console.warn(
+        `[logout] backend logout failed status=${status ?? "n/a"} tokenPresent=${Boolean(token)}`,
+      );
+      // Non-bloquant — voir clearSessionPresenceIfMatches côté backend :
+      // une session déjà stale/expirée n'empêche de toute façon pas le futur login.
+    }
+  },
 };

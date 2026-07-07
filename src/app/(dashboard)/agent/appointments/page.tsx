@@ -13,6 +13,7 @@ import { formatInputDate } from "@/features/workspace/mocks/mock.utils";
 import { useAgentWorkspaceState } from "@/components/workspace/agent-workspace-provider";
 
 const PAGE_SIZE = 10;
+const REFRESH_INTERVAL_MS = 300_000; // 5 minutes — cohérent avec la page RDV
 
 function formatDisplayDate(value: string) {
   return new Intl.DateTimeFormat("fr-TN", {
@@ -25,13 +26,22 @@ function formatDisplayDate(value: string) {
 
 export default function Page() {
   const router = useRouter();
-  const { latestReminderFocusDate, openReminderCall, reminders } =
+  const { latestReminderFocusDate, openReminderCall, reminders, fetchReminders } =
     useAgentWorkspaceState();
   const today = formatInputDate(new Date());
   const [selectedDate, setSelectedDate] = useState(
     latestReminderFocusDate ?? today,
   );
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Chargement au montage + rafraîchissement automatique — le backend est la
+  // source de vérité (GET /reminders), plus de données mock côté store.
+  useEffect(() => {
+    fetchReminders();
+    const interval = window.setInterval(() => fetchReminders(), REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);

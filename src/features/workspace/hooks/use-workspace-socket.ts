@@ -289,6 +289,34 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       }
     });
 
+    // Rappel dû (RemindersService, sweep périodique) — notifie l'agent avec
+    // les coordonnées et le numéro à recomposer MANUELLEMENT. Aucune action
+    // téléphonique automatique n'est déclenchée ici.
+    callsSocket.on("reminder.due", (data: {
+      reminder_id: number;
+      call_id: number;
+      phone_number: string;
+      contact: { id: number; name: string | null; phone: string } | null;
+      notes: string | null;
+      scheduled_at: string;
+    }) => {
+      console.log("[reminder.due]", data);
+
+      // Toast immédiat avec les coordonnées — construit directement depuis le
+      // payload WS (pas besoin d'attendre le refetch pour un premier retour visuel).
+      useWorkspaceStore.getState().pushDueReminderToast({
+        id:          `reminder-due-${data.reminder_id}-${Date.now()}`,
+        reminderId:  data.reminder_id,
+        contactName: data.contact?.name ?? null,
+        phone:       data.contact?.phone ?? data.phone_number,
+        notes:       data.notes,
+      });
+
+      // Rafraîchit "mes rappels" pour refléter le nouveau statut NOTIFIED
+      // (planned → priority côté UI) sans dupliquer la logique de mapping ici.
+      useWorkspaceStore.getState().fetchReminders().catch(() => {});
+    });
+
     callsSocket.connect();
 
     // ── 2. Namespace /agents ─────────────────────────────────────────────────
@@ -343,23 +371,39 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     return () => {
       clearTimeout(initGuardTimer);
 
-      callsSocket.off("connect");
-      callsSocket.off("call.contact.popup");
-      callsSocket.off("call.initiated");
-      callsSocket.off("call.answered");
-      callsSocket.off("call.ended");
-
-      agentsSocket.off("connect");
-      agentsSocket.off("agent.status.changed");
-
-      // Réinitialiser le guard uniquement si c'est un vrai changement de dépendances
-      // (token/userId changés), PAS pour un cycle React StrictMode (mêmes valeurs).
-      // En StrictMode dev, React démonte+remonte avec les mêmes deps — si on remet
-      // connectedRef à false, le second montage rouvre une connexion en doublon.
-      // On détecte un vrai changement en comparant les deps capturées dans la closure.
+      // BUG CORRIGÉ — ce cleanup faisait .off() sur TOUS les events (dont
+      // "reminder.due") inconditionnellement, même quand ce n'était qu'un
+      // cycle de double-montage React StrictMode (dev). Comme callsSocket/
+      // agentsSocket sont des singletons (socket-manager.ts) et que le garde
+      // `connectedRef.current` empêche le 2e montage de ré-enregistrer les
+      // listeners (voir le early-return tout en haut de l'effet), le résultat
+      // net après le cycle StrictMode était : PLUS AUCUN listener attaché sur
+      // le socket, alors que connectedRef restait `true` pour toujours. Les
+      // events comme call.contact.popup semblaient "marcher quand même" car
+      // les transitions d'état visibles viennent surtout de SIP.js en local
+      // (SessionState Established/Terminated), pas du WS — ce qui masquait le
+      // problème. `reminder.due` (event purement WS, sans équivalent SIP.js)
+      // l'a révélé : jamais reçu tant que la page n'est pas rechargée (ce qui
+      // remonte l'effet "pour de vrai" après un vrai unmount).
+      //
+      // Fix : ne détruire les listeners QUE lors d'un vrai démontage (deps
+      // ayant réellement changé — changement de token/userId, ex: logout),
+      // jamais lors d'un cleanup fantôme StrictMode à deps inchangées.
       const currentToken  = effectiveToken;
       const currentUserId = effectiveUserId;
-      if (currentToken !== token || currentUserId !== userId) {
+      const isRealTeardown = currentToken !== token || currentUserId !== userId;
+
+      if (isRealTeardown) {
+        callsSocket.off("connect");
+        callsSocket.off("call.contact.popup");
+        callsSocket.off("call.initiated");
+        callsSocket.off("call.answered");
+        callsSocket.off("call.ended");
+        callsSocket.off("reminder.due");
+
+        agentsSocket.off("connect");
+        agentsSocket.off("agent.status.changed");
+
         connectedRef.current = false;
         isInitializingRef.current = false;
       }

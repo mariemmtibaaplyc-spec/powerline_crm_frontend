@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMonitoringSnapshot } from "@/features/monitoring/hooks/use-monitoring";
 import type { LiveActivityEntry, LiveAgent, LiveAgentStatus } from "@/types/monitoring.types";
 
@@ -67,14 +67,40 @@ export function useLiveMonitoring() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // Ancre le début de statut par agent — recalculée uniquement quand le
+  // statut backend change (pas à chaque tick de `now`). Avant ce fix,
+  // statusStartedAt = now - baseDuration*1000 était recalculé à chaque
+  // render, donc elapsedSeconds = floor((now - statusStartedAt)/1000)
+  // redonnait algébriquement toujours baseDuration : le chrono affiché
+  // restait figé au lieu d'avancer chaque seconde — c'était la cause de
+  // "l'heure incorrecte" en monitoring admin/supervisor.
+  const statusAnchorsRef = useRef<Map<number, { status: string; anchor: number }>>(new Map());
+
   const normalizedAgents = useMemo<LiveAgent[]>(
-    () =>
-      backendAgents.map((agent) => {
+    () => {
+      const seenAgentIds = new Set<number>();
+
+      const agents = backendAgents.map((agent) => {
+        seenAgentIds.add(agent.agent_id);
+
         const baseDuration =
           agent.status_duration ??
           agent.current_call?.duration_live ??
           0;
-        const statusStartedAt = now - baseDuration * 1000;
+
+        const existingAnchor = statusAnchorsRef.current.get(agent.agent_id);
+        let statusStartedAt: number;
+        if (existingAnchor && existingAnchor.status === agent.status) {
+          // Statut inchangé depuis le dernier refresh — on garde l'ancre
+          // d'origine pour que le chrono continue d'avancer normalement.
+          statusStartedAt = existingAnchor.anchor;
+        } else {
+          // Premier agent vu, ou changement de statut — resynchronise sur
+          // la durée renvoyée par le backend.
+          statusStartedAt = now - baseDuration * 1000;
+          statusAnchorsRef.current.set(agent.agent_id, { status: agent.status, anchor: statusStartedAt });
+        }
+
         const liveStatus = mapBackendStatus(agent.status);
         const currentListName = agent.current_list?.name ?? "Aucune liste active";
         const currentCampaignName = agent.current_campaign?.name ?? "Sans campagne";
@@ -83,6 +109,7 @@ export function useLiveMonitoring() {
           id: String(agent.agent_id),
           agentNumericId: agent.agent_id,
           callId: agent.current_call?.call_id ?? null,
+          activeCallStatus: agent.current_call?.status ?? null,
           code: buildAgentCode(agent.agent_id),
           fullName: agent.agent_name || buildAgentCode(agent.agent_id),
           team: agent.role || "Agent",
@@ -96,7 +123,18 @@ export function useLiveMonitoring() {
           salesCount: agent.sales_today,
           listLabel: currentListName,
         };
-      }),
+      });
+
+      // Purge les ancres des agents disparus du snapshot (déconnectés,
+      // supprimés) pour éviter une fuite mémoire sur une session longue.
+      for (const trackedId of statusAnchorsRef.current.keys()) {
+        if (!seenAgentIds.has(trackedId)) {
+          statusAnchorsRef.current.delete(trackedId);
+        }
+      }
+
+      return agents;
+    },
     [backendAgents, now],
   );
 
@@ -127,15 +165,23 @@ export function useLiveMonitoring() {
     };
   }, [normalizedAgents, snapshot]);
 
-  const trafficMetrics = useMemo(
-    () => [
+  const trafficMetrics = useMemo(() => {
+    // Toutes les valeurs numériques du snapshot backend sont défensivement
+    // ramenées à 0 si absentes (null/undefined) — évite toute fuite de
+    // "NaN%"/"undefined" dans l'UI si un champ manque côté API.
+    const activeCalls = snapshot?.active_calls ?? liveCalls.length ?? 0;
+    const callsToday = snapshot?.calls_today ?? 0;
+    const abandonRate = snapshot?.abandon_rate ?? 0;
+    const dialerSpeed = snapshot?.dialer_speed ?? 0;
+
+    return [
       {
         label: "Places / en composition",
-        value: snapshot?.active_calls ?? liveCalls.length,
+        value: activeCalls,
         color: "bg-[#2d6fcb]",
         width:
-          snapshot && snapshot.calls_today > 0
-            ? `${Math.max(12, Math.min(100, Math.round((snapshot.active_calls / snapshot.calls_today) * 100)))}%`
+          callsToday > 0
+            ? `${Math.max(12, Math.min(100, Math.round((activeCalls / callsToday) * 100)))}%`
             : "12%",
       },
       {
@@ -146,25 +192,24 @@ export function useLiveMonitoring() {
       },
       {
         label: "Appels aujourd'hui",
-        value: snapshot?.calls_today ?? 0,
+        value: callsToday,
         color: "bg-[#6954cc]",
-        width: snapshot?.calls_today ? "86%" : "20%",
+        width: callsToday ? "86%" : "20%",
       },
       {
         label: "Abandons",
         value: snapshot?.abandoned_today ?? 0,
         color: "bg-[#d95a78]",
-        width: snapshot ? `${Math.max(10, snapshot.abandon_rate)}%` : "10%",
+        width: `${Math.max(10, abandonRate)}%`,
       },
       {
         label: "Vitesse",
-        value: `${snapshot?.dialer_speed ?? 0} %`,
+        value: `${dialerSpeed} %`,
         color: "bg-[#1ea672]",
-        width: `${snapshot?.dialer_speed ?? 0}%`,
+        width: `${dialerSpeed}%`,
       },
-    ],
-    [campaigns.length, liveCalls.length, snapshot],
-  );
+    ];
+  }, [campaigns.length, liveCalls.length, snapshot]);
 
   return {
     agents: normalizedAgents,

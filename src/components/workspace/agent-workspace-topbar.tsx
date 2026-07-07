@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCircle2, Coffee, LogOut, Mic, MicOff, PauseCircle } from "lucide-react";
 import { authClient } from "@/lib/better-auth.client";
+import { authApi } from "@/features/auth/api/auth.api";
 import { cn } from "@/lib/utils";
 import {
   formatAgentElapsedTime,
@@ -12,6 +13,7 @@ import {
 import { useClientClock } from "@/features/workspace/hooks/use-client-clock";
 import { useAuthStore } from "@/features/auth/store/auth.store";
 import { useSessionStore } from "@/store/session.store";
+import { useWorkspaceStore } from "@/features/workspace/store/workspace.store";
 import { destroyAllSockets } from "@/lib/socket-manager";
 
 export function AgentWorkspaceTopbar() {
@@ -26,18 +28,31 @@ export function AgentWorkspaceTopbar() {
     selectedPauseType,
     selectPauseType,
     startPause,
+    reminders,
+    dueReminderToasts,
+    dismissDueReminderToast,
+    startReminderCall,
   } = useAgentWorkspaceState();
   const setAuthSession = useAuthStore((state) => state.setSession);
   const clearSession = useSessionStore((state) => state.clearSession);
   const [micEnabled, setMicEnabled] = useState(true);
   const [pauseMenuOpen, setPauseMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const pauseMenuRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   const now = useClientClock(Boolean(activePause));
+
+  // Rappels dus (status backend NOTIFIED → "priority" côté front) — source
+  // réelle du badge, plus de mock (agentIdentity.notificationsCount retiré).
+  const dueReminders = reminders.filter((r) => r.status === "priority");
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
       if (!pauseMenuRef.current?.contains(event.target as Node)) {
         setPauseMenuOpen(false);
+      }
+      if (!notificationsRef.current?.contains(event.target as Node)) {
+        setNotificationsOpen(false);
       }
     }
 
@@ -48,6 +63,23 @@ export function AgentWorkspaceTopbar() {
   useEffect(() => {
     setPauseMenuOpen(false);
   }, [agentStatus]);
+
+  // Auto-dismiss des toasts "rappel dû" après 8s.
+  useEffect(() => {
+    if (dueReminderToasts.length === 0) return;
+    const timers = dueReminderToasts.map((toast) =>
+      window.setTimeout(() => dismissDueReminderToast(toast.id), 8000),
+    );
+    return () => timers.forEach(window.clearTimeout);
+  }, [dueReminderToasts, dismissDueReminderToast]);
+
+  function handleCallDueReminder(reminder: (typeof dueReminders)[number]) {
+    setNotificationsOpen(false);
+    // Réutilise exactement le même chemin que la page Rappels — ne touche
+    // pas au click-to-call lui-même.
+    startReminderCall(reminder);
+    router.push("/agent");
+  }
 
   const elapsedTime = activePause
     ? now === 0
@@ -66,10 +98,24 @@ export function AgentWorkspaceTopbar() {
   }
 
   async function handleLogout() {
+    // Cette page avait sa propre implémentation de logout, distincte de
+    // useLogout() (utilisé par topbar/sidebar admin & superviseur) — elle
+    // n'appelait jamais POST /auth/logout, donc la présence agent
+    // (active_session_id) n'était jamais libérée côté backend, bloquant
+    // toute reconnexion immédiate. On capture le token AVANT tout nettoyage
+    // et on appelle explicitement le backend, comme useLogout().
+    const accessToken =
+      useSessionStore.getState().session?.accessToken ??
+      useAuthStore.getState().session?.accessToken ??
+      (typeof window !== "undefined" ? window.localStorage.getItem("accessToken") : null);
+
+    await authApi.logout(accessToken);
+
     destroyAllSockets();
     await authClient.signOut();
     setAuthSession(null);
     clearSession();
+    useWorkspaceStore.setState({ userId: null, historyEntries: [] });
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     router.replace("/login");
@@ -130,16 +176,48 @@ export function AgentWorkspaceTopbar() {
               {micEnabled ? "Micro actif" : "Micro coupe"}
             </button>
 
-            <button
-              type="button"
-              className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white/82 transition hover:bg-white/12"
-              aria-label="Notifications"
-            >
-              <Bell className="h-4 w-4" />
-              {agentIdentity.notificationsCount > 0 ? (
-                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#f0b57d]" />
+            <div ref={notificationsRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen((value) => !value)}
+                className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white/82 transition hover:bg-white/12"
+                aria-label="Notifications"
+                aria-expanded={notificationsOpen}
+              >
+                <Bell className="h-4 w-4" />
+                {dueReminders.length > 0 ? (
+                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#f0b57d]" />
+                ) : null}
+              </button>
+
+              {notificationsOpen ? (
+                <div className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[300px] rounded-[1.1rem] border border-white/10 bg-[#0d1829] p-2.5 shadow-[0_22px_54px_rgba(7,12,20,0.34)]">
+                  <p className="px-2 pb-2 pt-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.18em] text-white/38">
+                    Rappels dus ({dueReminders.length})
+                  </p>
+                  <div className="max-h-[280px] space-y-1.5 overflow-y-auto pr-1 overscroll-contain">
+                    {dueReminders.length === 0 ? (
+                      <p className="px-2 py-3 text-xs text-white/50">Aucun rappel dû pour le moment.</p>
+                    ) : (
+                      dueReminders.map((reminder) => (
+                        <button
+                          key={reminder.id}
+                          type="button"
+                          onClick={() => handleCallDueReminder(reminder)}
+                          className="flex w-full flex-col gap-0.5 rounded-[0.9rem] border border-transparent bg-white/4 px-3 py-2.5 text-left text-sm text-white/85 transition hover:border-white/8 hover:bg-white/8"
+                        >
+                          <span className="font-semibold">{reminder.clientName || reminder.phone}</span>
+                          <span className="text-xs text-white/55">{reminder.phone} — {reminder.date} {reminder.time}</span>
+                          {reminder.note ? (
+                            <span className="truncate text-xs text-white/45">{reminder.note}</span>
+                          ) : null}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
               ) : null}
-            </button>
+            </div>
 
             <div ref={pauseMenuRef} className="relative">
               <button
@@ -286,6 +364,37 @@ export function AgentWorkspaceTopbar() {
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {/* Toasts "rappel dû" — feedback immédiat sur reminder.due, en plus du
+          badge sur la cloche. Auto-dismiss 8s (voir useEffect ci-dessus). */}
+      {dueReminderToasts.length > 0 ? (
+        <div className="fixed right-4 top-4 z-50 flex w-[320px] flex-col gap-2">
+          {dueReminderToasts.map((toast) => (
+            <div
+              key={toast.id}
+              className="rounded-[1rem] border border-[#f0b57d]/30 bg-[#1b2438] p-3.5 text-white shadow-[0_18px_40px_rgba(7,12,20,0.4)]"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f0b57d]">
+                  <Bell className="h-3.5 w-3.5" />
+                  Rappel dû
+                </div>
+                <button
+                  type="button"
+                  onClick={() => dismissDueReminderToast(toast.id)}
+                  className="text-white/40 transition hover:text-white/70"
+                  aria-label="Fermer"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="mt-1.5 text-sm font-semibold">{toast.contactName || toast.phone}</p>
+              <p className="text-xs text-white/60">{toast.phone}</p>
+              {toast.notes ? <p className="mt-1 text-xs text-white/50">{toast.notes}</p> : null}
+            </div>
+          ))}
         </div>
       ) : null}
     </>

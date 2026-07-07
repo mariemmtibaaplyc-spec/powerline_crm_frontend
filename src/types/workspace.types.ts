@@ -91,6 +91,13 @@ export interface Reminder {
   note: string;
   status: ReminderStatus;
   prospect: ProspectSheet;
+  // Champs bruts backend (Reminder.contact_id/lead_id/campaign_id) — utilisés
+  // par openReminderCall() pour relancer l'appel exactement comme un appel
+  // manuel (POST /calls avec le même phone_number/campaign_id/lead_id, qui
+  // résout le contact côté backend et retourne la fiche complète).
+  contactId?: number | null;
+  leadId?: number | null;
+  campaignId?: number | null;
 }
 
 export type HistoryStatus =

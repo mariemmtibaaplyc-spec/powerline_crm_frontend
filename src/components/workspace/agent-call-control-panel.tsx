@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
-  ChevronDown,
   Clock3,
   Delete,
   PauseCircle,
@@ -240,18 +239,9 @@ export function AgentCallControlPanel() {
             </div>
 
             <div ref={statusMenuRef} className="relative shrink-0">
-              {process.env.NODE_ENV !== "production" ? (
-                <button
-                  type="button"
-                  onClick={() => setStatusMenuOpen((value) => !value)}
-                  className="inline-flex h-9 items-center gap-2 rounded-full border border-[#d9e4f0] bg-white/72 px-3 text-xs font-medium text-[#516579] shadow-[0_10px_24px_rgba(20,32,53,0.06)] backdrop-blur-sm transition hover:border-[#c9d8e7] hover:bg-white"
-                  aria-expanded={statusMenuOpen}
-                >
-                  Simuler
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
-
+              {/* Bouton "Simuler" retiré de l'UI agent V1 — state/logique conservés
+                  (setStatusMenuOpen, SIMULATED_AGENT_STATUS_OPTIONS) au cas où
+                  réutilisés ailleurs (ex: outil interne admin). */}
               {statusMenuOpen ? (
                 <div className="absolute right-0 top-[calc(100%+0.7rem)] z-30 w-[220px] rounded-[1.2rem] border border-white/10 bg-[#0d1829] p-2.5 shadow-[0_22px_54px_rgba(7,12,20,0.34)]">
                   <p className="px-2 pb-2 pt-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.18em] text-white/38">

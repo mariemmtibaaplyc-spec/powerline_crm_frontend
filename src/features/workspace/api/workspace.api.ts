@@ -1,7 +1,7 @@
 // src/features/workspace/api/workspace.api.ts
 
 import { apiClient } from "@/lib/axios";
-import type { AppointmentEntry, HistoryEntry, HistoryStatus, ProspectSheet } from "@/types/workspace.types";
+import type { AppointmentEntry, HistoryEntry, HistoryStatus, ProspectSheet, Reminder, ReminderStatus } from "@/types/workspace.types";
 import { createUnknownManualCallProspect } from "@/features/workspace/mocks/prospects.mock";
 
 // ─── Types réponse ────────────────────────────────────────────────────────────
@@ -35,6 +35,11 @@ export interface EndCallBody {
     scheduled_at: string;   // ISO : "2026-06-25T09:30:00"
     notes?: string;
   };
+  /** Qualification RAPPEL — crée un Reminder backend (voir RemindersService) */
+  reminder?: {
+    scheduled_at: string;   // ISO : "2026-06-25T09:30:00"
+    notes?: string;
+  };
 }
 
 export interface EndCallResponse {
@@ -50,6 +55,12 @@ export interface EndCallResponse {
   // snake_case — cohérent avec les autres champs de la réponse backend.
   // Distinct de appointmentError (camelCase) qui est l'état interne du store.
   appointment_error?: true;
+  reminder?: {
+    id: number;
+    scheduled_at: string;
+    status: string;
+  };
+  reminder_error?: true;
 }
 
 export interface BackendQualification {
@@ -108,6 +119,65 @@ function mapBackendAppointmentToEntry(appt: any): AppointmentEntry {
               : "",
         }
       : createUnknownManualCallProspect(""),
+  };
+}
+
+// ─── Reminders (rappels) mapping ───────────────────────────────────────────────
+//
+// Backend ReminderStatus (PENDING|NOTIFIED|DONE|CANCELLED) → frontend
+// ReminderStatus (planned|priority|confirmed|reported/cancelled) — les deux
+// value-sets ne correspondent pas 1:1, cf. STATUS_META dans appointments-table.tsx.
+function mapBackendReminderStatus(status: string): ReminderStatus {
+  switch (status) {
+    case "PENDING":   return "planned";
+    case "NOTIFIED":  return "priority";
+    case "DONE":      return "confirmed";
+    case "CANCELLED": return "reported";
+    default:          return "planned";
+  }
+}
+
+function mapBackendReminderToEntry(reminder: any): Reminder {
+  const scheduled = new Date(reminder.scheduled_at);
+  const contact = reminder.contact as ContactSearchResult | null | undefined;
+  const clientName = contact
+    ? `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim() || contact.phone
+    : (reminder.phone_number ?? "");
+
+  return {
+    id:         String(reminder.id),
+    date:       String(reminder.scheduled_at).slice(0, 10),
+    time:       scheduled.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+    clientName,
+    phone:      contact?.phone ?? reminder.phone_number ?? "",
+    campaign:   "",
+    queue:      "",
+    note:       reminder.notes ?? "",
+    status:     mapBackendReminderStatus(reminder.status),
+    // Fiche détail (ProspectSheet) — mêmes champs enrichis que les RDV
+    // (REMINDER_INCLUDE côté backend a été aligné sur AppointmentsRepository).
+    // Fallback createUnknownManualCallProspect si aucune fiche contact liée
+    // (rappel sur un numéro hors CRM, ex: cold call).
+    prospect:   contact
+      ? {
+          id:             String(contact.id),
+          firstName:      contact.first_name  ?? "",
+          lastName:       contact.last_name   ?? "",
+          phone:          contact.phone       ?? "",
+          phoneSecondary: contact.phone2      ?? "",
+          email:          contact.email       ?? "",
+          address:        contact.address     ?? "",
+          postalCode:     contact.postal_code ?? "",
+          city:           contact.city        ?? "",
+          comments:
+            typeof contact.custom_fields?.commentaires === "string"
+              ? contact.custom_fields.commentaires
+              : "",
+        }
+      : createUnknownManualCallProspect(reminder.phone_number ?? ""),
+    contactId:  contact?.id ?? reminder.contact_id ?? null,
+    leadId:     reminder.lead_id ?? null,
+    campaignId: reminder.campaign_id ?? null,
   };
 }
 
@@ -249,6 +319,7 @@ export const workspaceApi = {
     agent_id: number;
     phone_number: string;
     campaign_id?: number;
+    lead_id?: number;
     agent_extension?: string;
   }): Promise<CallResponse> {
     const { data } = await apiClient.post("/calls", body);
@@ -336,6 +407,22 @@ export const workspaceApi = {
     const payload = unwrap<any>(data);
     const rows: any[] = Array.isArray(payload) ? payload : (payload?.data ?? []);
     return rows.map(mapBackendAppointmentToEntry);
+  },
+
+  // ── Agent reminders (rappels) ────────────────────────────────────────────────
+
+  async getReminders(agentId: number): Promise<Reminder[]> {
+    const { data } = await apiClient.get("/reminders", { params: { agent_id: agentId } });
+    const rows: any[] = Array.isArray(data) ? data : (unwrap<any>(data) ?? []);
+    return rows.map(mapBackendReminderToEntry);
+  },
+
+  async markReminderDone(reminderId: number): Promise<void> {
+    await apiClient.patch(`/reminders/${reminderId}/done`);
+  },
+
+  async cancelReminder(reminderId: number): Promise<void> {
+    await apiClient.delete(`/reminders/${reminderId}`);
   },
 
   // ── Agent call history ───────────────────────────────────────────────────────

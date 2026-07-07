@@ -81,6 +81,7 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
   const setAuthSession = useAuthStore((s) => s.setSession);
   const initFromSession    = useWorkspaceStore((s) => s.initFromSession);
   const fetchDailyStats    = useWorkspaceStore((s) => s.fetchDailyStats);
+  const fetchReminders     = useWorkspaceStore((s) => s.fetchReminders);
   const initializedUserIdRef = useRef<number | null>(null);
 
   // Identifiant effectif : sessionStore en priorité, puis authStore (après refresh)
@@ -148,7 +149,19 @@ export function AgentWorkspaceProvider({ children }: { children: ReactNode }) {
     // indépendamment de la page visitée. Alimente dailyStatsCache → sidebar + footer.
     fetchDailyStats();
     const statsInterval = window.setInterval(fetchDailyStats, 300_000);
-    return () => window.clearInterval(statsInterval);
+
+    // Idem pour les rappels — avant ce fix, `reminders` restait vide (donc le
+    // badge de la topbar aussi) tant que l'agent n'avait pas visité la page
+    // Rappels au moins une fois (seul endroit qui appelait fetchReminders()).
+    // Le provider étant toujours monté après connexion, on récupère les
+    // rappels dès l'authentification, indépendamment de la page visitée.
+    fetchReminders();
+    const remindersInterval = window.setInterval(fetchReminders, 300_000);
+
+    return () => {
+      window.clearInterval(statsInterval);
+      window.clearInterval(remindersInterval);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveUserId]);
 

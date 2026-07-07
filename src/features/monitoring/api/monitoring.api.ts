@@ -216,15 +216,18 @@ export const monitoringApi = {
   },
   // ── Supervision actions (écoute / whisper / barge / raccroc) ─────────────
 
+  // supervisor_ext n'est plus fourni par le client — résolu et validé côté
+  // serveur depuis User.sip_extension du compte connecté (voir
+  // SupervisionService._resolveSupervisorExt).
+
   async joinCall(params: {
     call_id: number;
-    supervisor_ext: string;
     mode: 'listen' | 'whisper' | 'barge';
   }): Promise<{ message: string }> {
     try {
       const { data } = await apiClient.post(
         `/supervision/calls/${params.call_id}/join`,
-        { supervisor_ext: params.supervisor_ext, mode: params.mode },
+        { mode: params.mode },
       );
       return unwrapPayload(data) as { message: string };
     } catch (error) {
@@ -234,13 +237,12 @@ export const monitoringApi = {
 
   async changeMode(params: {
     call_id: number;
-    supervisor_ext: string;
     new_mode: 'listen' | 'whisper' | 'barge';
   }): Promise<{ message: string }> {
     try {
       const { data } = await apiClient.post(
         `/supervision/calls/${params.call_id}/mode`,
-        { supervisor_ext: params.supervisor_ext, new_mode: params.new_mode },
+        { new_mode: params.new_mode },
       );
       return unwrapPayload(data) as { message: string };
     } catch (error) {
@@ -250,12 +252,10 @@ export const monitoringApi = {
 
   async leaveCall(params: {
     call_id: number;
-    supervisor_ext: string;
   }): Promise<{ message: string }> {
     try {
       const { data } = await apiClient.delete(
         `/supervision/calls/${params.call_id}/leave`,
-        { data: { supervisor_ext: params.supervisor_ext } },
       );
       return unwrapPayload(data) as { message: string };
     } catch (error) {
