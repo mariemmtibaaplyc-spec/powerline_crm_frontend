@@ -84,6 +84,12 @@ export interface Reminder {
   id: Id;
   date: string;
   time: string;
+  // ISO complet (scheduled_at backend) — utilisé pour calculer en temps réel
+  // la fenêtre "5 min avant" du badge de notification (icône cloche).
+  scheduledAt?: string;
+  // Date de qualification (created_at backend) — moment où l'agent a qualifié
+  // l'appel en RAPPEL, distinct de scheduledAt (date à laquelle rappeler).
+  qualifiedAt?: string;
   clientName: string;
   phone: string;
   campaign: string;

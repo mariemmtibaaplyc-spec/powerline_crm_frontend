@@ -16,12 +16,20 @@ const PAGE_SIZE = 10;
 const REFRESH_INTERVAL_MS = 300_000; // 5 minutes — cohérent avec la page RDV
 
 function formatDisplayDate(value: string) {
+  // Le <input type="date"> émet une valeur vide/partielle pendant la saisie
+  // (ex: "2026-07-" en tapant) avant d'atteindre une date complète valide —
+  // éviter de crasher sur `new Date(...)` invalide dans ce cas transitoire.
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
   return new Intl.DateTimeFormat("fr-TN", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
+  }).format(parsed);
 }
 
 export default function Page() {
@@ -32,6 +40,9 @@ export default function Page() {
   const [selectedDate, setSelectedDate] = useState(
     latestReminderFocusDate ?? today,
   );
+  // Filtre optionnel par date de qualification (created_at) — vide = pas de
+  // filtre sur cet axe, distinct du filtre sur la date de rappel (scheduledAt).
+  const [selectedQualificationDate, setSelectedQualificationDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
   // Chargement au montage + rafraîchissement automatique — le backend est la
@@ -45,7 +56,7 @@ export default function Page() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedDate]);
+  }, [selectedDate, selectedQualificationDate]);
 
   useEffect(() => {
     if (!latestReminderFocusDate) {
@@ -58,12 +69,15 @@ export default function Page() {
   const filteredReminders = useMemo(() => {
     return reminders
       .filter((reminder) => {
-        if (selectedDate === today) {
-          return reminder.date === today;
-        }
-
-        if (selectedDate < today) {
-          return reminder.date >= selectedDate && reminder.date <= today;
+        // Chaque filtre fonctionne indépendamment de l'autre : dès que la
+        // "Date de qualification" est renseignée, elle pilote seule
+        // l'affichage (rappels qualifiés ce jour-là, quelle que soit leur
+        // date de rappel) — elle ne s'ajoute pas au filtre "Date", elle le
+        // remplace. Sans quoi le filtre "Date" (toujours renseigné) inclut
+        // en permanence ses propres résultats et la qualification ne
+        // retirerait jamais rien de la liste.
+        if (selectedQualificationDate) {
+          return reminder.qualifiedAt?.slice(0, 10) === selectedQualificationDate;
         }
 
         return reminder.date === selectedDate;
@@ -75,7 +89,7 @@ export default function Page() {
 
         return left.time.localeCompare(right.time);
       });
-  }, [reminders, selectedDate, today]);
+  }, [reminders, selectedDate, selectedQualificationDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredReminders.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -87,9 +101,7 @@ export default function Page() {
   const selectionNote =
     selectedDate === today
       ? "Affichage centre sur les rappels du jour."
-      : selectedDate < today
-        ? `Affichage cumule du ${formatDisplayDate(selectedDate)} jusqu'a aujourd'hui.`
-        : `Affichage des rappels planifies pour le ${formatDisplayDate(selectedDate)}.`;
+      : `Affichage des rappels planifies pour le ${formatDisplayDate(selectedDate)}.`;
 
   function handleCallReminder(reminder: AgentReminderItem) {
     openReminderCall(reminder);
@@ -113,7 +125,29 @@ export default function Page() {
                 <input
                   type="date"
                   value={selectedDate}
-                  onChange={(event) => setSelectedDate(event.target.value)}
+                  onChange={(event) => {
+                    // Ignore les valeurs vides/partielles émises pendant la
+                    // saisie (voir formatDisplayDate) — ce filtre est requis,
+                    // il ne doit jamais rester vide.
+                    if (event.target.value) {
+                      setSelectedDate(event.target.value);
+                    }
+                  }}
+                  className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-[#102033] outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="inline-flex min-h-[72px] items-center gap-3 rounded-[1.25rem] border border-[#dce6f0] bg-white px-4 py-3 shadow-[0_10px_24px_rgba(20,32,53,0.06)]">
+              <CalendarDays className="h-4 w-4 text-[#5d7690]" />
+              <div className="space-y-1">
+                <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.16em] text-[#6c7f93]">
+                  Date de qualification
+                </p>
+                <input
+                  type="date"
+                  value={selectedQualificationDate}
+                  onChange={(event) => setSelectedQualificationDate(event.target.value)}
                   className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-[#102033] outline-none"
                 />
               </div>
@@ -126,7 +160,10 @@ export default function Page() {
 
             <button
               type="button"
-              onClick={() => setSelectedDate(today)}
+              onClick={() => {
+                setSelectedDate(today);
+                setSelectedQualificationDate("");
+              }}
               className="inline-flex min-h-[72px] items-center gap-2 rounded-[1.25rem] border border-[#dce6f0] bg-white px-4 text-sm font-medium text-[#24415d] shadow-[0_10px_22px_rgba(20,32,53,0.06)] transition hover:-translate-y-0.5 hover:border-[#c9d8e7] hover:bg-[#f8fbff]"
             >
               <RotateCcw className="h-4 w-4" />
@@ -137,11 +174,19 @@ export default function Page() {
       />
 
       <div className="flex flex-wrap items-center gap-3 rounded-[1.4rem] border border-[#dce6f0] bg-[linear-gradient(180deg,#fbfdff_0%,#f5f9fd_100%)] px-4 py-3 text-sm text-[#607287] shadow-[0_12px_28px_rgba(20,32,53,0.05)]">
-        <span className="font-medium text-[#102033]">
-          Vue du {formatDisplayDate(selectedDate)}
-        </span>
-        <span className="h-1 w-1 rounded-full bg-[#8aa2bc]" />
-        <span>{selectionNote}</span>
+        {selectedQualificationDate ? (
+          <span className="font-medium text-[#102033]">
+            Rappels qualifies le {formatDisplayDate(selectedQualificationDate)}.
+          </span>
+        ) : (
+          <>
+            <span className="font-medium text-[#102033]">
+              Vue du {formatDisplayDate(selectedDate)}
+            </span>
+            <span className="h-1 w-1 rounded-full bg-[#8aa2bc]" />
+            <span>{selectionNote}</span>
+          </>
+        )}
       </div>
 
       <AppointmentsTable

@@ -41,10 +41,25 @@ export function AgentWorkspaceTopbar() {
   const pauseMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const now = useClientClock(Boolean(activePause));
+  // Horloge dédiée au badge de notification — tourne en continu (indépendamment
+  // de activePause) pour recalculer la fenêtre "5 min avant" en temps réel.
+  const REMINDER_LOOKAHEAD_MS = 5 * 60 * 1000;
+  const badgeClockNow = useClientClock(true, 15_000);
 
-  // Rappels dus (status backend NOTIFIED → "priority" côté front) — source
-  // réelle du badge, plus de mock (agentIdentity.notificationsCount retiré).
-  const dueReminders = reminders.filter((r) => r.status === "priority");
+  // Rappels affichés dans la cloche de notification : soit déjà notifiés par
+  // le backend (status "priority" = NOTIFIED), soit encore "planned" mais dont
+  // l'heure de rappel arrive dans moins de 5 min (calculé côté client à partir
+  // de scheduledAt, sans attendre le sweep backend qui ne marque NOTIFIED qu'à
+  // l'heure exacte). Ne touche pas au toast "rappel dû" (dueReminderToasts) ni
+  // au comportement d'appel, qui restent basés sur l'event WS reminder.due.
+  const dueReminders = reminders.filter((r) => {
+    if (r.status === "priority") return true;
+    if (r.status === "planned" && r.scheduledAt) {
+      const msUntilDue = new Date(r.scheduledAt).getTime() - badgeClockNow;
+      return msUntilDue > 0 && msUntilDue <= REMINDER_LOOKAHEAD_MS;
+    }
+    return false;
+  });
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {

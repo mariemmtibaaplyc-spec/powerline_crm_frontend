@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, CalendarDays, Clock3, FileText, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { TimeInput24 } from "@/components/ui/time-input-24";
 import { Textarea } from "@/components/ui/textarea";
 import { useAgentWorkspaceState } from "@/components/workspace/agent-workspace-provider";
 import { formatInputDate } from "@/features/workspace/mocks/mock.utils";
@@ -140,11 +141,10 @@ export function QualificationForm() {
                 <Clock3 className="h-4 w-4 text-[#5d7690]" />
                 Heure du rendez-vous
               </span>
-              <Input
-                type="time"
+              <TimeInput24
                 value={time}
-                onChange={(event) => setTime(event.target.value)}
-                className="h-12 rounded-[1.15rem] border-[#d7e3ef] bg-white"
+                onChange={setTime}
+                className="h-12"
               />
             </label>
           </div>

@@ -113,12 +113,20 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
 
       // Mettre à jour la callSession avec les IDs Backend
       useWorkspaceStore.setState((state) => {
-        const nextStatus = state.agentStatus === "in_call" ? "in_call" : "ringing";
         // Préserver "manual" si call.initiated a déjà positionné la direction pour ce même appel
         const isAlreadyManual =
           state.callSession.direction === "manual" &&
           state.callSession.backendCallId === data.call_id;
         const direction = isAlreadyManual ? "manual" : "predictive";
+        // Un appel prédictif est déjà décroché côté client quand ce popup arrive
+        // (le backend n'envoie call.contact.popup qu'après le bridge) — pas de
+        // statut "En sonnerie" pour l'agent, on reste en "En attente" jusqu'au
+        // vrai passage en_call (call.answered / SIP Established), qui joue le
+        // bip de connexion. Seul un appel manuel affiche "En sonnerie" ici.
+        const nextStatus =
+          state.agentStatus === "in_call" ? "in_call" :
+          direction === "manual" ? "ringing" :
+          state.agentStatus;
         console.log(`[TIMING] Zustand update call.contact.popup t=${Date.now()} callId=${data.call_id} agentStatus=${nextStatus} direction=${direction}`);
         return {
           agentStatus:      nextStatus,

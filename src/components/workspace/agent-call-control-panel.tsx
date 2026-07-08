@@ -98,17 +98,25 @@ export function AgentCallControlPanel() {
     if (!dialPadOpen) return;
 
     function handleKeyDown(event: KeyboardEvent) {
+      // Quand le focus est dans le champ "Numéro composé", l'input natif gère
+      // déjà la saisie (onChange) — laisser passer, sinon le chiffre/backspace
+      // est appliqué deux fois (une fois par l'input, une fois ici).
+      const isTypingInField = event.target instanceof HTMLInputElement;
+
       if (/^[0-9*#]$/.test(event.key)) {
+        if (isTypingInField) return;
         setManualNumber((current) => `${current}${event.key}`);
         return;
       }
 
       if (event.key === "Backspace") {
+        if (isTypingInField) return;
         setManualNumber((current) => current.slice(0, -1));
         return;
       }
 
       if (event.key === "Delete") {
+        if (isTypingInField) return;
         setManualNumber("");
         return;
       }

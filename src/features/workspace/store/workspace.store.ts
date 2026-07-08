@@ -51,6 +51,34 @@ function buildReminderDraftNote(values: ReminderFormValues) {
     : `[RAPPEL ${schedule}]`;
 }
 
+/**
+ * Marque DONE le rappel à l'origine de l'appel en cours (callSession.activeReminderId),
+ * une fois que l'agent l'a "traité" — quelle que soit l'issue de la qualification
+ * (RDV, refus, appel simple, etc.). Sans ça, un rappel resté PENDING/NOTIFIED ne
+ * disparaissait de la liste de notifications QUE si l'agent le requalifiait à
+ * nouveau en RAPPEL sur le même contact (seul cas géré côté backend, via
+ * closeOpenRemindersForTarget dans RemindersService.createFromCall) — dans
+ * tous les autres cas (RDV, qualification simple), il restait affiché indéfiniment,
+ * y compris le lendemain.
+ * Non-bloquant : un échec ne doit jamais empêcher la fin de qualification.
+ */
+async function markActiveReminderDoneIfAny(activeReminderId: string | null): Promise<void> {
+  if (!activeReminderId) return;
+  const reminderId = Number(activeReminderId);
+  if (!Number.isFinite(reminderId)) return;
+
+  try {
+    const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+    await workspaceApi.markReminderDone(reminderId);
+    console.log(`[markActiveReminderDoneIfAny] reminder_id=${reminderId} marked DONE`);
+    useWorkspaceStore.getState().fetchReminders().catch(() => {});
+  } catch (err: any) {
+    // Non-bloquant — si déjà DONE/CANCELLED côté backend (ex: superseded par
+    // un nouveau rappel entre-temps), pas grave, on ne bloque jamais la qualification.
+    console.warn(`[markActiveReminderDoneIfAny] failed reminder_id=${reminderId}:`, err?.message ?? err);
+  }
+}
+
 /** Combine date+time du formulaire rappel en ISO local, pour Reminder.scheduled_at backend. */
 function buildReminderScheduledAtIso(values: ReminderFormValues): string {
   return `${values.date}T${values.time}:00`;
@@ -553,6 +581,11 @@ startPause: (pauseCode) => {
     return;
   }
 
+  // Qualification "simple" (ni RAPPEL ni RDV) — le rappel qui a déclenché cet
+  // appel (s'il y en a un) a été traité, on le clôture pour qu'il disparaisse
+  // de la liste de notifications.
+  markActiveReminderDoneIfAny(callSession.activeReminderId).catch(() => {});
+
   // Signaler le statut au backend après qualification.
   // On utilise /me — pas besoin de userId valide côté URL.
   // Le guard "if (userId)" est supprimé car il bloquait l'appel quand
@@ -710,6 +743,23 @@ startPause: (pauseCode) => {
       } else if (response.appointment) {
         // RDV créé avec succès — refetch la liste depuis le backend (données exactes)
         useWorkspaceStore.getState().fetchAppointments(values.date).catch(() => {});
+
+        // Compteur "RDV du jour" (sidebar footer) — mise à jour optimiste
+        // immédiate si le RDV est pris pour aujourd'hui, sans attendre le
+        // prochain polling de fetchDailyStats() (5 min).
+        if (values.date === formatInputDate(new Date())) {
+          set((state) => ({
+            dailyStatsCache: state.dailyStatsCache
+              ? {
+                  ...state.dailyStatsCache,
+                  appointments_today: state.dailyStatsCache.appointments_today + 1,
+                }
+              : state.dailyStatsCache,
+          }));
+        }
+        // Recale ensuite sur la valeur exacte du backend (couvre le cas où
+        // dailyStatsCache n'était pas encore chargé, ou une divergence).
+        useWorkspaceStore.getState().fetchDailyStats().catch(() => {});
       }
     } catch (err) {
       console.error("[submitAppointmentQualification] endCall failed:", err);
@@ -719,6 +769,10 @@ startPause: (pauseCode) => {
 
     // Si le RDV a échoué, garder la modale ouverte pour que l'agent voie l'erreur
     if (appointmentFailed) return;
+
+    // Rappel traité via une qualification RDV — le clôturer aussi (voir
+    // markActiveReminderDoneIfAny pour le contexte complet du bug corrigé).
+    markActiveReminderDoneIfAny(callSession.activeReminderId).catch(() => {});
 
     if (nextStatus === "paused") {
       workspaceApi.setPaused(userId ?? 0).catch(console.error);

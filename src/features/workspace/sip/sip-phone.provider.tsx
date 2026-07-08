@@ -60,6 +60,24 @@ function createRingTone(ctx: AudioContext): () => void {
   };
 }
 
+// ── Bip de connexion (appel prédictif) ─────────────────────────────────────
+// Joué une seule fois dès que le client décroche et que l'agent bascule en
+// in_call sans avoir "sonné" lui-même (auto-answer prédictif) — signal pour
+// que l'agent sache qu'il doit dire "Allo" immédiatement.
+function playConnectBeep(ctx: AudioContext) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.frequency.value = 900;
+  gain.gain.value = 0.2;
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start();
+  osc.stop(ctx.currentTime + 0.25);
+}
+
 export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
   const session     = useSessionStore((s) => s.session);
   const authSession = useAuthStore((s) => s.session);
@@ -91,6 +109,37 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
 
   const [registered,      setRegistered]      = useState(false);
   const [hasIncomingCall, setHasIncomingCall] = useState(false);
+
+  // ── Sonnerie appel manuel sortant ───────────────────────────────────────
+  // Pour un appel manuel, aucun INVITE SIP n'arrive côté agent pendant la
+  // phase "ça sonne" (le destinataire n'a pas encore décroché) — seul le
+  // statut agent passe à "ringing" (voir startManualCall dans workspace.store.ts).
+  // On rejoue donc la même sonnerie synthétique ici, pilotée par ce statut,
+  // et on l'arrête dès que le statut quitte "ringing" (ex: SIP Established
+  // bascule agentStatus en "in_call", cf. setupSessionListeners ci-dessous).
+  const agentStatus       = useWorkspaceStore((s) => s.agentStatus);
+  // Un appel prédictif passe aussi par agentStatus "ringing" (cf.
+  // call.contact.popup dans use-workspace-socket.ts) — cette sonnerie ne doit
+  // jouer que pour un appel déclenché par l'agent (manuel ou rappel), pas
+  // pour un prédictif (qui a son propre bip de connexion, cf. plus bas).
+  const callDirection     = useWorkspaceStore((s) => s.callSession.direction);
+  useEffect(() => {
+    const isAgentInitiated = callDirection === "manual" || callDirection === "reminder";
+    if (agentStatus === "ringing" && isAgentInitiated && !hasIncomingCall) {
+      if (!stopRingtoneRef.current) {
+        try {
+          if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+            audioCtxRef.current = new AudioContext();
+          }
+          stopRingtoneRef.current = createRingTone(audioCtxRef.current);
+        } catch (e) {
+          console.warn("[SipPhoneProvider] Could not start manual-call ringtone:", e);
+        }
+      }
+    } else {
+      stopRingtone();
+    }
+  }, [agentStatus, callDirection, hasIncomingCall]);
 
   useEffect(() => {
     const audio = document.createElement("audio");
@@ -237,6 +286,21 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
         useWorkspaceStore.setState((s) => {
           if (s.agentStatus === "ringing" || s.agentStatus === "waiting") {
             console.log("[SipPhoneProvider] SIP Established → agentStatus = in_call");
+
+            // Appel prédictif (direction "predictive", cf. call.contact.popup
+            // dans use-workspace-socket.ts) — pas de sonnerie manuelle pour ce
+            // flux, juste un bip pour signaler que le client vient de décrocher.
+            if (s.callSession.direction === "predictive") {
+              try {
+                if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+                  audioCtxRef.current = new AudioContext();
+                }
+                playConnectBeep(audioCtxRef.current);
+              } catch (e) {
+                console.warn("[SipPhoneProvider] Could not play connect beep:", e);
+              }
+            }
+
             return {
               agentStatus:     "in_call" as const,
               statusStartedAt: Date.now(),

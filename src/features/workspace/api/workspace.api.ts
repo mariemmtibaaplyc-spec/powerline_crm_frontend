@@ -148,6 +148,8 @@ function mapBackendReminderToEntry(reminder: any): Reminder {
     id:         String(reminder.id),
     date:       String(reminder.scheduled_at).slice(0, 10),
     time:       scheduled.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+    scheduledAt: reminder.scheduled_at,
+    qualifiedAt: reminder.created_at,
     clientName,
     phone:      contact?.phone ?? reminder.phone_number ?? "",
     campaign:   "",

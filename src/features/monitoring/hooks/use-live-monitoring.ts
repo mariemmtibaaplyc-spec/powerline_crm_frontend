@@ -11,7 +11,7 @@ function mapBackendStatus(status: string): LiveAgentStatus {
     case "IN_CALL":
       return "in_call";
     case "RINGING":
-      return "ringing";
+      return "waiting";
     case "WRAP_UP":
       return "qualification";
     case "PAUSED":
