@@ -77,7 +77,14 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     callsSocketRef.current = callsSocket;
 
     callsSocket.on("connect", () => {
+      console.log(`[WS calls] connected socketId=${callsSocket.id ?? 'none'} userId=${userId}`);
       callsSocket.emit("join.agent", { agent_id: userId });
+    });
+    callsSocket.on("joined", (payload) => {
+      console.log("[WS calls] joined room ack:", payload);
+    });
+    callsSocket.on("connect_error", (error) => {
+      console.error("[WS calls] connect_error:", error.message);
     });
 
     // Appel entrant dialer → remplir fiche + RINGING
@@ -283,9 +290,14 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
         useWorkspaceStore.setState({ activeCampaignId: data.campaign_id });
       }
 
-      if (data.action === "OPEN_QUALIFICATION" || isManualCall || isPredictiveCall) {
-        // Manuel : toujours ouvrir la qualification.
-        // Prédictif : ouvrir quand le backend signale OPEN_QUALIFICATION (AMI flow).
+      const canOpenQualification =
+        data.action === "OPEN_QUALIFICATION" ||
+        ((isManualCall || isPredictiveCall) && data.status === "COMPLETED");
+
+      if (canOpenQualification) {
+        // Manuel : seulement si le backend confirme COMPLETED.
+        // Prédictif : ouvrir quand le backend signale OPEN_QUALIFICATION (AMI flow),
+        // ou à défaut sur COMPLETED confirmé.
         store.openQualification();
         const logPrefix = isPredictiveCall ? "[PredictiveHangup]" : "[ManualHangup]";
         console.log(
@@ -342,7 +354,14 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
     agentsSocketRef.current = agentsSocket;
 
     agentsSocket.on("connect", () => {
+      console.log(`[WS agents] connected socketId=${agentsSocket.id ?? 'none'} userId=${userId}`);
       agentsSocket.emit("join.agent", { agent_id: userId });
+    });
+    agentsSocket.on("joined", (payload) => {
+      console.log("[WS agents] joined room ack:", payload);
+    });
+    agentsSocket.on("connect_error", (error) => {
+      console.error("[WS agents] connect_error:", error.message);
     });
 
     // Changement de statut agent (depuis Asterisk ou Backend)
@@ -418,9 +437,13 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
         callsSocket.off("call.answered");
         callsSocket.off("call.ended");
         callsSocket.off("reminder.due");
+        callsSocket.off("joined");
+        callsSocket.off("connect_error");
 
         agentsSocket.off("connect");
         agentsSocket.off("agent.status.changed");
+        agentsSocket.off("joined");
+        agentsSocket.off("connect_error");
 
         connectedRef.current = false;
         isInitializingRef.current = false;

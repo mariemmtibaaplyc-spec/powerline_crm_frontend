@@ -334,7 +334,7 @@ export function SipPhoneProvider({ children }: { children: React.ReactNode }) {
         if (terminationFallbackRef.current) clearTimeout(terminationFallbackRef.current);
         terminationFallbackRef.current = setTimeout(() => {
           const snap = useWorkspaceStore.getState();
-          if (snap.agentStatus === "in_call") {
+          if (snap.agentStatus === "in_call" && snap.callSession.backendCallId) {
             console.warn("[SipPhoneProvider] call.ended WS never arrived after Terminated — forcing openQualification()");
             snap.openQualification();
           }

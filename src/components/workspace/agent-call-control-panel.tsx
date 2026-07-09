@@ -421,7 +421,7 @@ export function AgentCallControlPanel() {
             // Pour le prédictif : sipHangup() ci-dessus a envoyé le BYE SIP →
             // Asterisk reçoit le raccroché → AMI envoie call.ended + OPEN_QUALIFICATION
             // On appelle aussi endCall pour marquer l'appel en DB (idempotent si AMI arrive en premier).
-            await workspaceApi.endCall(callId, {});
+            const endResult = await workspaceApi.endCall(callId, {});
 
             if (isPredictive) {
               // Prédictif : la qualification viendra via le WS call.ended (AMI flow)
@@ -430,19 +430,28 @@ export function AgentCallControlPanel() {
                 `${logPrefix} endCall sent, waiting for call.ended WS callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
               );
             } else {
-              // Manuel : ouvrir la qualification immédiatement (le WS n'est pas fiable pour tous les cas manuels)
-              openQualification();
-              console.log(
-                `${logPrefix} qualification opened source=http callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
-              );
+              // Manuel : n'ouvrir la qualification que si le backend confirme
+              // un call qualifiable (COMPLETED). FAILED / NO_ANSWER / BUSY ne
+              // doivent jamais envoyer l'agent vers une qualification normale.
+              if (endResult.status === "COMPLETED") {
+                openQualification();
+                console.log(
+                  `${logPrefix} qualification opened source=http callId=${callId} campaignId=${activeCampaignId ?? 'none'} status=${endResult.status}`,
+                );
+              } else {
+                markAgentHungUp();
+                console.log(
+                  `${logPrefix} qualification skipped source=http callId=${callId} campaignId=${activeCampaignId ?? 'none'} status=${endResult.status}`,
+                );
+              }
             }
           } catch (err) {
             console.error("[hangup] endCall failed:", err);
-            // Fallback : ouvrir la qualification localement
+            // Fallback minimal : ne jamais ouvrir une qualification manuelle
+            // sans confirmation backend.
             markAgentHungUp();
-            openQualification();
             console.log(
-              `${logPrefix} qualification opened source=http_fallback callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
+              `${logPrefix} qualification skipped source=http_fallback callId=${callId} campaignId=${activeCampaignId ?? 'none'}`,
             );
           }
         } else {

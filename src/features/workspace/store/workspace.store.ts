@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import axios from "axios";
 import { useSessionStore } from "@/store/session.store";
 import { useAuthStore } from "@/features/auth/store/auth.store";
 import {
@@ -823,7 +824,13 @@ startPause: (pauseCode) => {
   }));
 },
   startManualCall: async (number: string) => {
-  const { userId, activeCampaignId, sipExtension } = useWorkspaceStore.getState();
+  const {
+    userId,
+    activeCampaignId,
+    sipExtension,
+    agentStatus: previousAgentStatus,
+    selectedPauseTypeCode,
+  } = useWorkspaceStore.getState();
   if (!userId) {
   console.error("[startManualCall] userId not set — initFromSession not called?");
   return;
@@ -867,14 +874,40 @@ startPause: (pauseCode) => {
 
   // Appels API en parallèle
   const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
-
-  const callResult = await workspaceApi.startManualCall({
+  const payload = {
     agent_id: userId!,
     phone_number: number,
     campaign_id: activeCampaignId ?? undefined,
     agent_extension: sipExtension ?? undefined,
-  }).catch((error) => {
+  };
+
+  console.log("[startManualCall] POST /calls payload:", payload);
+
+  const callResult = await workspaceApi.startManualCall(payload).catch((error) => {
+    if (axios.isAxiosError(error)) {
+      console.error("[startManualCall] POST /calls failed response:", error.response?.data);
+    }
     console.error("[startManualCall] POST /calls failed:", error);
+
+    useWorkspaceStore.setState((state) => ({
+      ...state,
+      agentStatus: previousAgentStatus,
+      statusStartedAt: Date.now(),
+      qualificationPanelOpen: false,
+      reminderFormOpen: false,
+      appointmentFormOpen: false,
+      selectedQualification: null,
+      selectedQualificationId: null,
+      selectedQualificationMeta: null,
+      pendingQualificationNextStatus: null,
+      currentCallId: null,
+      isEndingCall: false,
+      endingCallId: null,
+      activePause: previousAgentStatus === "paused"
+        ? { type: resolvePauseType(selectedPauseTypeCode), startedAt: Date.now() }
+        : null,
+      callSession: createIdleCallSession(),
+    }));
     return null;
   });
 
@@ -933,6 +966,10 @@ startPause: (pauseCode) => {
     const reminderId = "id" in entry ? entry.id : null;
     const campaignIdHint = "campaignId" in entry ? entry.campaignId ?? undefined : undefined;
     const leadIdHint = "leadId" in entry ? entry.leadId ?? undefined : undefined;
+    const {
+      agentStatus: previousAgentStatus,
+      selectedPauseTypeCode,
+    } = useWorkspaceStore.getState();
 
     set((state) => ({
       ...state,
@@ -961,20 +998,45 @@ startPause: (pauseCode) => {
 
     const { userId, activeCampaignId, sipExtension } = useWorkspaceStore.getState();
     if (!userId) {
-      console.error("[openReminderCall] userId not set — initFromSession not called?");
-      return;
+    console.error("[openReminderCall] userId not set — initFromSession not called?");
+    return;
     }
 
     const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
-
-    const callResult = await workspaceApi.startManualCall({
+    const payload = {
       agent_id:        userId,
       phone_number:    entry.phone,
       campaign_id:     campaignIdHint ?? activeCampaignId ?? undefined,
       lead_id:         leadIdHint,
       agent_extension: sipExtension ?? undefined,
-    }).catch((error) => {
+    };
+
+    console.log("[openReminderCall] POST /calls payload:", payload);
+
+    const callResult = await workspaceApi.startManualCall(payload).catch((error) => {
+      if (axios.isAxiosError(error)) {
+        console.error("[openReminderCall] POST /calls failed response:", error.response?.data);
+      }
       console.error("[openReminderCall] POST /calls failed:", error);
+      useWorkspaceStore.setState((state) => ({
+        ...state,
+        agentStatus: previousAgentStatus,
+        statusStartedAt: Date.now(),
+        qualificationPanelOpen: false,
+        reminderFormOpen: false,
+        appointmentFormOpen: false,
+        selectedQualification: null,
+        selectedQualificationId: null,
+        selectedQualificationMeta: null,
+        pendingQualificationNextStatus: null,
+        currentCallId: null,
+        isEndingCall: false,
+        endingCallId: null,
+        activePause: previousAgentStatus === "paused"
+          ? { type: resolvePauseType(selectedPauseTypeCode), startedAt: Date.now() }
+          : null,
+        callSession: createIdleCallSession(),
+      }));
       return null;
     });
 
