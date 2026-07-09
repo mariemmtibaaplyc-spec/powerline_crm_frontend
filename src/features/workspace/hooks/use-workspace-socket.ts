@@ -97,6 +97,9 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       //   c) un appel différent est déjà actif (event retardé d'un ancien appel)
       const snapshot = useWorkspaceStore.getState();
       const activeCallId = snapshot.callSession.backendCallId;
+      const isIntentionalAgentCall =
+        snapshot.callSession.direction === "manual" ||
+        snapshot.callSession.direction === "reminder";
       const isStale =
         snapshot.qualificationPanelOpen ||
         snapshot.isEndingCall ||
@@ -104,6 +107,13 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
       if (isStale) {
         console.warn(
           `[call.contact.popup] ignored stale/unsafe event callId=${data.call_id} activeCallId=${activeCallId ?? 'none'} qualificationPanelOpen=${snapshot.qualificationPanelOpen} isEndingCall=${snapshot.isEndingCall}`,
+        );
+        return;
+      }
+
+      if (snapshot.agentStatus === "paused" && !isIntentionalAgentCall) {
+        console.warn(
+          `[call.contact.popup] ignored because agent is locally paused callId=${data.call_id} activeCallId=${activeCallId ?? 'none'} direction=${snapshot.callSession.direction ?? 'none'}`,
         );
         return;
       }

@@ -592,7 +592,12 @@ startPause: (pauseCode) => {
   // userId=0 ou null dans le store.
   if (nextStatus === "paused") {
     console.log(`[PredictiveWrapUp] pause -> PAUSED userId=${userId ?? 'me'} callId=${callId}`);
-    workspaceApi.setPaused(userId ?? 0).catch(console.error);
+    try {
+      await workspaceApi.setPaused(userId ?? 0);
+    } catch (err) {
+      console.error("[PredictiveWrapUp] setPaused failed:", err);
+      return;
+    }
   } else {
     console.log(`[ResumePredictive] qualification closed callId=${callId} userId=${userId ?? 'me'}`);
     workspaceApi.setAvailable(userId ?? 0).then(() => {
@@ -671,7 +676,12 @@ startPause: (pauseCode) => {
     if (appointmentFailed) return;
 
     if (nextStatus === "paused") {
-      workspaceApi.setPaused(userId ?? 0).catch(console.error);
+      try {
+        await workspaceApi.setPaused(userId ?? 0);
+      } catch (err) {
+        console.error("[submitReminderQualification] setPaused failed:", err);
+        return;
+      }
     } else {
       console.log(`[ResumePredictive] setAvailable via /me userId=${userId ?? 'me'}`);
       workspaceApi.setAvailable(userId ?? 0).then(() => {
@@ -775,7 +785,12 @@ startPause: (pauseCode) => {
     markActiveReminderDoneIfAny(callSession.activeReminderId).catch(() => {});
 
     if (nextStatus === "paused") {
-      workspaceApi.setPaused(userId ?? 0).catch(console.error);
+      try {
+        await workspaceApi.setPaused(userId ?? 0);
+      } catch (err) {
+        console.error("[submitAppointmentQualification] setPaused failed:", err);
+        return;
+      }
     } else {
       console.log(`[ResumePredictive] setAvailable via /me userId=${userId ?? 'me'}`);
       workspaceApi.setAvailable(userId ?? 0).then(() => {
