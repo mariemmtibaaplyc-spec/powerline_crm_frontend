@@ -204,6 +204,8 @@ export function useAgentWorkspaceState() {
     selectBackendQualification: state.selectBackendQualification,
     appointmentError: state.appointmentError,
     dismissAppointmentError: state.dismissAppointmentError,
+    pauseError: state.pauseError,
+    dismissPauseError: state.dismissPauseError,
     fetchAppointments: state.fetchAppointments,
     fetchDailyStats: state.fetchDailyStats,
     dailyStatsCache: state.dailyStatsCache,

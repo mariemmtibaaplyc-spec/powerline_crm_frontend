@@ -66,6 +66,8 @@ export function AgentCallControlPanel() {
     resumeQueue,
     setAgentStatus,
     startManualCall,
+    startPause,
+    selectedPauseTypeCode,
     statusStartedAt,
   } = useAgentWorkspaceState();
 
@@ -158,6 +160,16 @@ export function AgentCallControlPanel() {
     (agentStatus === "in_call" || agentStatus === "hung_up" || agentStatus === "ringing");
   const canPauseFromCurrentState = agentStatus === "waiting";
 
+  // Le bouton Pause/Reprendre occupe le même emplacement à l'écran — un clic
+  // résiduel juste après le changement de statut peut retomber dessus et
+  // inverser l'action par accident (ex: repasser disponible juste après une
+  // pause volontaire, alors que le prédictif continuerait d'appeler l'agent).
+  // Court délai de sécurité pendant lequel ce bouton reste désactivé.
+  const AVAILABILITY_COOLDOWN_MS = 1500;
+  const availabilityCooldownActive =
+    (agentStatus === "paused" || agentStatus === "waiting") &&
+    now - statusStartedAt < AVAILABILITY_COOLDOWN_MS;
+
   useEffect(() => {
     const mode = agentStatus === "paused" ? "manual" : agentStatus === "waiting" ? "predictive" : "other";
     console.log(
@@ -171,21 +183,25 @@ export function AgentCallControlPanel() {
   const availabilityAction = isPaused
     ? {
         label: "Reprendre la file",
-        hint: "Rejoindre la file prédictive",
+        hint: availabilityCooldownActive
+          ? "Patientez un instant avant de reprendre"
+          : "Rejoindre la file prédictive",
         icon: Play,
         tone:
           "border-[#cfeee4] bg-[linear-gradient(135deg,#14a57e_0%,#0f8b6d_100%)] text-white shadow-[0_18px_36px_rgba(15,139,109,0.2)]",
-        disabled: false,
+        disabled: availabilityCooldownActive,
       }
     : {
         label: "Pause",
-        hint: canPauseFromCurrentState
-          ? "Basculer l'agent en pause"
-          : "Disponible uniquement depuis l'etat En attente",
+        hint: !canPauseFromCurrentState
+          ? "Disponible uniquement depuis l'etat En attente"
+          : availabilityCooldownActive
+            ? "Patientez un instant avant de vous mettre en pause"
+            : "Basculer l'agent en pause",
         icon: PauseCircle,
         tone:
           "border-[#d8e0e8] bg-[linear-gradient(135deg,#eff3f7_0%,#e3e9f0_100%)] text-[#203246] shadow-[0_18px_36px_rgba(20,32,53,0.08)]",
-        disabled: !canPauseFromCurrentState,
+        disabled: !canPauseFromCurrentState || availabilityCooldownActive,
       };
   // Quand l'agent a un appel entrant (manuel), remplacer "Appel manuel" par "Décrocher"
   const manualCallAction = hasIncomingCall
@@ -345,6 +361,8 @@ export function AgentCallControlPanel() {
                   type="button"
                     disabled={action.disabled}
                     onClick={
+                      (() => {
+                        const handler =
                       isManualCall
                         ? hasIncomingCall
                           ? sipAccept
@@ -355,7 +373,7 @@ export function AgentCallControlPanel() {
                           ? action.label === "Reprendre la file"
                             ? resumeQueue
                             : canPauseFromCurrentState
-                              ? () => setAgentStatus("paused")
+                              ? () => startPause(selectedPauseTypeCode ?? undefined)
                               : undefined
                           : isHangupAction
   ? canOpenQualificationFromHangup
@@ -463,7 +481,17 @@ export function AgentCallControlPanel() {
         }
       }
     : undefined
-  : undefined
+  : undefined;
+                        // Retire le focus clavier après le clic — sinon ce bouton
+                        // change de sens (Pause ↔ Reprendre) au même endroit et
+                        // reste focus, ce qui permet à une touche Entrée/Espace
+                        // ultérieure de le re-déclencher par accident.
+                        if (!handler) return undefined;
+                        return (event: React.MouseEvent<HTMLButtonElement>) => {
+                          event.currentTarget.blur();
+                          void handler();
+                        };
+                      })()
                     }
                     className={cn(
                       "min-h-[118px] rounded-[1.4rem] border px-5 py-5 text-left transition hover:-translate-y-0.5",

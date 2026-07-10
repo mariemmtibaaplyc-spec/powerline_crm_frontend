@@ -146,7 +146,15 @@ function formatDuration(seconds: unknown) {
   return `${minutes} min`;
 }
 
-function formatStatusLabel(status: string) {
+const PAUSE_TYPE_LABELS: Record<string, string> = {
+  coffee: "Pause cafe",
+  lunch: "Pause dejeuner",
+  meeting: "Reunion",
+  micro: "Micro pause",
+  technical: "Probleme technique",
+};
+
+function formatStatusLabel(status: string, pauseType?: string | null) {
   switch (status) {
     case "AVAILABLE":
       return "Disponible";
@@ -156,8 +164,10 @@ function formatStatusLabel(status: string) {
       return "Attente";
     case "WRAP_UP":
       return "Qualification";
-    case "PAUSED":
-      return "Pause";
+    case "PAUSED": {
+      const pauseLabel = pauseType ? PAUSE_TYPE_LABELS[pauseType] ?? pauseType : null;
+      return pauseLabel ? `Pause - ${pauseLabel}` : "Pause";
+    }
     case "OFFLINE":
       return "Hors ligne";
     default:
@@ -464,7 +474,7 @@ export default function Page() {
         id: agent.agent_id,
         name: toStringValue(agent.agent_name, `Agent #${agent.agent_id}`),
         campaign: agent.current_campaign?.name ?? "Sans campagne",
-        status: formatStatusLabel(agent.status),
+        status: formatStatusLabel(agent.status, agent.pause_type),
         occupancy: formatNumber(agent.calls_today),
         quality: formatDuration(agent.avg_dmc),
       }));

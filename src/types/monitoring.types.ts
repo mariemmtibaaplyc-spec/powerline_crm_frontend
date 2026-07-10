@@ -24,6 +24,7 @@ export interface LiveAgent {
   group: string;
   campaign: string;
   status: LiveAgentStatus;
+  pauseType?: string | null;
   statusStartedAt: number;
   lastAction: string;
   elapsedSeconds?: number;

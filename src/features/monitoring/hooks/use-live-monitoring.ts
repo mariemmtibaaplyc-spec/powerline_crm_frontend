@@ -23,6 +23,22 @@ function mapBackendStatus(status: string): LiveAgentStatus {
   }
 }
 
+// Libellés des types de pause — mêmes codes que PAUSE_OPTIONS côté workspace
+// agent (src/features/workspace/mocks/agent.mock.ts), dupliqués ici pour
+// éviter un couplage entre les features monitoring et workspace.
+const PAUSE_TYPE_LABELS: Record<string, string> = {
+  coffee: "Pause cafe",
+  lunch: "Pause dejeuner",
+  meeting: "Reunion",
+  micro: "Micro pause",
+  technical: "Probleme technique",
+};
+
+export function getPauseTypeLabel(pauseType?: string | null) {
+  if (!pauseType) return null;
+  return PAUSE_TYPE_LABELS[pauseType] ?? pauseType;
+}
+
 function buildAgentCode(agentId: number) {
   return `Agent ${String(agentId).padStart(3, "0")}`;
 }
@@ -116,6 +132,7 @@ export function useLiveMonitoring() {
           group: currentCampaignName,
           campaign: currentCampaignName,
           status: liveStatus,
+          pauseType: agent.pause_type ?? null,
           statusStartedAt,
           lastAction: buildLastAction(agent),
           elapsedSeconds: Math.max(0, Math.floor((now - statusStartedAt) / 1000)),

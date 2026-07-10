@@ -26,17 +26,24 @@ export function AgentWorkspaceTopbar() {
     endPause,
     pauseOptions,
     selectedPauseType,
+    selectedPauseTypeCode,
     selectPauseType,
     startPause,
     reminders,
     dueReminderToasts,
     dismissDueReminderToast,
     startReminderCall,
+    pauseError,
+    dismissPauseError,
   } = useAgentWorkspaceState();
   const setAuthSession = useAuthStore((state) => state.setSession);
   const clearSession = useSessionStore((state) => state.clearSession);
   const [micEnabled, setMicEnabled] = useState(true);
   const [pauseMenuOpen, setPauseMenuOpen] = useState(false);
+  // La carte "Pause active" (type + timer) ne s'affiche que si l'agent a
+  // explicitement choisi un type via l'icône café — pas automatiquement dès
+  // que le statut passe en pause (qualification, bouton Pause, etc.).
+  const [pauseCardOpen, setPauseCardOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const pauseMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -77,6 +84,7 @@ export function AgentWorkspaceTopbar() {
 
   useEffect(() => {
     setPauseMenuOpen(false);
+    if (agentStatus !== "paused") setPauseCardOpen(false);
   }, [agentStatus]);
 
   // Auto-dismiss des toasts "rappel dû" après 8s.
@@ -102,13 +110,30 @@ export function AgentWorkspaceTopbar() {
       : formatAgentElapsedTime(now - activePause.startedAt)
     : "00:00:00";
 
+  // Démarre la pause. Si l'agent a explicitement cliqué un motif dans le
+  // menu avant de valider, selectedPauseTypeCode (brut, nullable) porte ce
+  // choix et il est transmis au backend/monitoring. Sinon (validation directe
+  // sans choix de motif), on ne transmet aucun type — la table monitoring
+  // affiche "Pause" seule tant que l'agent n'a pas choisi explicitement.
   function handleStartPause() {
-    startPause(selectedPauseType.code);
+    startPause(selectedPauseTypeCode ?? undefined);
+    setPauseCardOpen(true);
+    setPauseMenuOpen(false);
+  }
+
+  // Choix du type PENDANT que l'agent est déjà en pause (qualification ou
+  // bouton Pause déclenchés avant tout choix de type) — met à jour le type
+  // de la pause en cours et affiche la carte personnalisée pour ce type.
+  function handleChooseTypeWhilePaused(code: Parameters<typeof selectPauseType>[0]) {
+    selectPauseType(code);
+    startPause(code);
+    setPauseCardOpen(true);
     setPauseMenuOpen(false);
   }
 
   function handleEndPause() {
     endPause();
+    setPauseCardOpen(false);
     setPauseMenuOpen(false);
   }
 
@@ -237,11 +262,7 @@ export function AgentWorkspaceTopbar() {
             <div ref={pauseMenuRef} className="relative">
               <button
                 type="button"
-                onClick={() => {
-                  if (!activePause) {
-                    setPauseMenuOpen((value) => !value);
-                  }
-                }}
+                onClick={() => setPauseMenuOpen((value) => !value)}
                 className={cn(
                   "inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition",
                   activePause || agentStatus === "paused"
@@ -263,7 +284,9 @@ export function AgentWorkspaceTopbar() {
                       Menu des pauses
                     </p>
                     <p className="mt-2 text-sm text-white/62">
-                      Selectionner un motif avant de passer l'agent en pause.
+                      {activePause
+                        ? "Choisir le motif de la pause en cours."
+                        : "Selectionner un motif avant de passer l'agent en pause."}
                     </p>
                   </div>
 
@@ -275,7 +298,11 @@ export function AgentWorkspaceTopbar() {
                         <button
                           key={item.code}
                           type="button"
-                          onClick={() => selectPauseType(item.code)}
+                          onClick={() =>
+                            activePause
+                              ? handleChooseTypeWhilePaused(item.code)
+                              : selectPauseType(item.code)
+                          }
                           className={cn(
                             "flex w-full items-center justify-between rounded-[1rem] border px-3 py-3 text-left text-sm transition",
                             active
@@ -309,13 +336,15 @@ export function AgentWorkspaceTopbar() {
                     })}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleStartPause}
-                    className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#f0b57d_0%,#d99154_100%)] px-4 text-sm font-semibold text-[#1a2533] shadow-[0_18px_36px_rgba(217,145,84,0.22)] transition hover:-translate-y-0.5"
-                  >
-                    Prendre une pause
-                  </button>
+                  {!activePause ? (
+                    <button
+                      type="button"
+                      onClick={handleStartPause}
+                      className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#f0b57d_0%,#d99154_100%)] px-4 text-sm font-semibold text-[#1a2533] shadow-[0_18px_36px_rgba(217,145,84,0.22)] transition hover:-translate-y-0.5"
+                    >
+                      Prendre une pause
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -332,7 +361,10 @@ export function AgentWorkspaceTopbar() {
         </div>
       </div>
 
-      {activePause ? (
+      {/* Carte de pause personnalisée — affichée uniquement après un choix de
+          type explicite via l'icône café (pauseCardOpen), pas automatiquement
+          dès que le statut passe en pause. */}
+      {activePause && pauseCardOpen ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(7,12,20,0.58)] px-4 py-6 backdrop-blur-sm">
           <div className="relative w-full max-w-[540px] overflow-hidden rounded-[2rem] border border-[#1b2d43] bg-[linear-gradient(180deg,#122238_0%,#0d1829_100%)] p-6 text-white shadow-[0_40px_100px_rgba(7,12,20,0.4)] sm:p-8">
             <div className="pointer-events-none absolute left-1/2 top-0 h-36 w-36 -translate-x-1/2 bg-[radial-gradient(circle,rgba(240,181,125,0.22),transparent_72%)] blur-3xl" />
@@ -378,6 +410,31 @@ export function AgentWorkspaceTopbar() {
                 Terminer la pause
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Erreur pause/reprise — le backend n'a pas confirmé le changement de
+          statut, l'agent doit le savoir immédiatement (sinon il se croit en
+          pause pendant que le dialer prédictif continue de l'appeler). */}
+      {pauseError ? (
+        <div className="fixed right-4 top-20 z-50 w-[320px]">
+          <div className="rounded-[1rem] border border-[#e35b5b]/40 bg-[#2a1418] p-3.5 text-white shadow-[0_18px_40px_rgba(7,12,20,0.4)]">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#e88787]">
+                <PauseCircle className="h-3.5 w-3.5" />
+                Statut non confirmé
+              </div>
+              <button
+                type="button"
+                onClick={dismissPauseError}
+                className="text-white/40 transition hover:text-white/70"
+                aria-label="Fermer"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mt-1.5 text-sm">{pauseError}</p>
           </div>
         </div>
       ) : null}

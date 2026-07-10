@@ -810,17 +810,20 @@ export const reportingApi = {
 
   async getPauseReports(
     params: ReportingDashboardParams = {},
+    signal?: AbortSignal,
   ): Promise<ReportingPauseReportsData> {
     try {
       const response = await apiClient.get<BackendReportingPauseReportsResponse>(
         "/reporting/pause-reports",
         {
           params: sanitizeDashboardParams(params),
+          signal,
         },
       );
 
       return extractPauseReportsData(response.data);
     } catch (error) {
+      if (axios.isCancel(error)) throw error;
       throw toReportingError(
         error,
         "Impossible de charger le rapport des pauses pour le moment.",
@@ -830,17 +833,20 @@ export const reportingApi = {
 
   async getSessionsHistory(
     params: ReportingDashboardParams = {},
+    signal?: AbortSignal,
   ): Promise<ReportingSessionsHistoryData> {
     try {
       const response = await apiClient.get<BackendReportingSessionsHistoryResponse>(
         "/reporting/sessions-history",
         {
           params: sanitizeDashboardParams(params),
+          signal,
         },
       );
 
       return extractSessionsHistoryData(response.data);
     } catch (error) {
+      if (axios.isCancel(error)) throw error;
       throw toReportingError(
         error,
         "Impossible de charger l'historique des sessions pour le moment.",

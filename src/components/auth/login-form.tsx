@@ -10,7 +10,6 @@ import {
   User,
   Users,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
 import { useLogin } from "@/features/auth/hooks/use-login";
@@ -333,13 +332,7 @@ export function LoginForm({ variant = "default" }: LoginFormProps) {
         </div>
 
         {!isMinimal ? (
-          <div className="flex items-center justify-between gap-4 pt-1">
-            <Link
-              className="text-sm text-white/72 underline-offset-4 transition hover:text-white hover:underline"
-              href="/forgot-password"
-            >
-              Mot de passe oublie ?
-            </Link>
+          <div className="flex items-center justify-end gap-4 pt-1">
             <div className="rounded-full bg-[#0f6a66]/22 px-3 py-1 text-xs font-medium text-[#b9ece7]">
               password
             </div>

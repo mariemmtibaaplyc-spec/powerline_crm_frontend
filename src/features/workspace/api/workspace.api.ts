@@ -303,9 +303,12 @@ export const workspaceApi = {
     return unwrap(data);
   },
 
-  async setPaused(_userId: number): Promise<AgentStatusResponse> {
-    console.log(`[WorkspaceAgentId] setPaused via "me" (storeUserId=${_userId})`);
-    const { data } = await apiClient.patch(`/agent-statuses/me/paused`);
+  async setPaused(_userId: number, pauseType?: string | null): Promise<AgentStatusResponse> {
+    console.log(`[WorkspaceAgentId] setPaused via "me" (storeUserId=${_userId}, pauseType=${pauseType ?? "none"})`);
+    const { data } = await apiClient.patch(
+      `/agent-statuses/me/paused`,
+      pauseType ? { pause_type: pauseType } : {},
+    );
     return unwrap(data);
   },
 

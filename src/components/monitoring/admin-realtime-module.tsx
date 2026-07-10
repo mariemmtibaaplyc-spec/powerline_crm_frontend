@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import {
   formatElapsedTime,
+  getPauseTypeLabel,
   getStatusLabel,
   useLiveMonitoring,
 } from "@/features/monitoring/hooks/use-live-monitoring";
@@ -443,7 +444,9 @@ function AgentRealtimeRow({
       <td className="px-3 py-2.5">
         <span className={`inline-flex items-center gap-2 rounded-[0.55rem] px-2.5 py-1 text-xs font-semibold ${statusTone}`}>
           {getStatusIcon(agent.status)}
-          {getStatusLabel(agent.status)}
+          {agent.status === "paused" && getPauseTypeLabel(agent.pauseType)
+            ? `${getStatusLabel(agent.status)} - ${getPauseTypeLabel(agent.pauseType)}`
+            : getStatusLabel(agent.status)}
         </span>
       </td>
       <td className="px-3 py-2.5 font-semibold tabular-nums">

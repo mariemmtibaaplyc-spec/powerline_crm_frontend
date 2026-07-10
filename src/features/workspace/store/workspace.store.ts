@@ -95,7 +95,7 @@ interface AgentWorkspaceStoreState {
   activeProspect: ProspectSheet;
   callSession: CallSession;
   activePause: ActivePause | null;
-  selectedPauseTypeCode: PauseType["code"];
+  selectedPauseTypeCode: PauseType["code"] | null;
   qualificationPanelOpen: boolean;
   reminderFormOpen: boolean;
   appointmentFormOpen: boolean;
@@ -112,6 +112,10 @@ interface AgentWorkspaceStoreState {
 
   // ── State AJOUT Backend ───────────────────────────────────────────────────
   appointmentError: string | null; // null = pas d'erreur, string = message à afficher dans la modale
+  // Erreur pause/reprise — le statut affiché doit toujours refléter ce que le
+  // backend a réellement enregistré (sinon un agent peut se croire en pause
+  // alors que le dialer prédictif continue de l'appeler).
+  pauseError: string | null;
   // Cache du dernier poll daily-stats — null avant le premier fetch.
   // null → sidebar affiche "—" (placeholder neutre, pas "0").
   // Contient toutes les statistiques journalières — utilisé par le footer ET la sidebar.
@@ -144,8 +148,9 @@ interface AgentWorkspaceStoreState {
   selectPauseType: (pauseCode: PauseType["code"]) => void;
   setAgentStatus: (status: AgentStatus) => void;
   resumeQueue: () => void;
-  startPause: (pauseCode?: PauseType["code"]) => void;
-  endPause: () => void;
+  startPause: (pauseCode?: PauseType["code"]) => Promise<void>;
+  endPause: () => Promise<void>;
+  dismissPauseError: () => void;
   openQualification: () => void;
   closeQualification: (nextStatus?: "paused" | "waiting") => Promise<void>;
   cancelReminderForm: () => void;
@@ -220,6 +225,7 @@ function createInitialState() {
     isStatusMutationPending: false,
     pendingAgentStatusTarget: null as "AVAILABLE" | "PAUSED" | "OFFLINE" | null,
     appointmentError: null as string | null,
+    pauseError: null as string | null,
     backendQualifications: [] as BackendQualification[],
     selectedQualificationId: null as number | null,
     selectedQualificationMeta: null as BackendQualification | null,
@@ -238,7 +244,7 @@ function createInitialState() {
       backendLeadId: null,
     } satisfies CallSession,
     activePause: null as ActivePause | null,
-    selectedPauseTypeCode: PAUSE_OPTIONS[0].code,
+    selectedPauseTypeCode: null as PauseType["code"] | null,
     qualificationPanelOpen: false,
     reminderFormOpen: false,
     appointmentFormOpen: false,
@@ -403,20 +409,31 @@ export const useWorkspaceStore = create<AgentWorkspaceStoreState>((set) => ({
   }));
 },
 
-startPause: (pauseCode) => {
-  // Appel API fire-and-forget
+startPause: async (pauseCode) => {
+  // Le statut affiché DOIT refléter ce que le backend a réellement enregistré
+  // — sinon l'agent se croit en pause pendant que le dialer prédictif continue
+  // de l'appeler (le filtre AVAILABLE/PAUSED du prédictif se base uniquement
+  // sur la DB, jamais sur cet état local).
   const { userId, qualificationPanelOpen, isEndingCall } = useWorkspaceStore.getState();
   if (qualificationPanelOpen || isEndingCall) {
     console.log("[startPause] ignored because qualification transition is active");
     return;
   }
-  if (userId) {
-    import("@/features/workspace/api/workspace.api").then(({ workspaceApi }) => {
-      workspaceApi.setPaused(userId).catch((err) =>
-        console.error("[startPause] setPaused failed:", err),
-      );
+  if (!userId) return;
+
+  set({ pauseError: null });
+
+  try {
+    const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+    await workspaceApi.setPaused(userId, pauseCode ?? null);
+  } catch (err) {
+    console.error("[startPause] setPaused failed:", err);
+    set({
+      pauseError: "La pause n'a pas pu être enregistrée côté serveur. Réessayez — vous êtes toujours considéré disponible.",
     });
+    return;
   }
+
   set((state) => {
     const pauseType = resolvePauseType(pauseCode ?? state.selectedPauseTypeCode);
     const startedAt = Date.now();
@@ -438,27 +455,35 @@ startPause: (pauseCode) => {
     };
   });
 },
-  endPause: () => {
-    // Appel API fire-and-forget — passer AVAILABLE quand on termine la pause
+  endPause: async () => {
     const { userId, qualificationPanelOpen, isEndingCall } = useWorkspaceStore.getState();
     if (qualificationPanelOpen || isEndingCall) {
       console.log("[endPause] ignored because qualification transition is active");
       return;
     }
-    if (userId) {
-      import("@/features/workspace/api/workspace.api").then(({ workspaceApi }) => {
-        workspaceApi.setAvailable(userId).catch((err) =>
-          console.error("[endPause] setAvailable failed:", err),
-        );
+    if (!userId) return;
+
+    set({ pauseError: null });
+
+    try {
+      const { workspaceApi } = await import("@/features/workspace/api/workspace.api");
+      await workspaceApi.setAvailable(userId);
+    } catch (err) {
+      console.error("[endPause] setAvailable failed:", err);
+      set({
+        pauseError: "La reprise n'a pas pu être confirmée côté serveur. Réessayez — vous êtes toujours en pause.",
       });
+      return;
     }
-    // Mise à jour UI optimiste → "waiting" (disponible pour appels)
+
     set((state) => ({
       ...state,
       ...applyStatusTransition(state, "waiting"),
       activePause: null,
+      selectedPauseTypeCode: null,
     }));
   },
+  dismissPauseError: () => set({ pauseError: null }),
 
   openQualification: () =>
     set((state) => {

@@ -290,14 +290,20 @@ export function useWorkspaceSocket(onAutoAnswer?: () => void) {
         useWorkspaceStore.setState({ activeCampaignId: data.campaign_id });
       }
 
+      // Manuel : l'agent a choisi ce numéro lui-même → il doit pouvoir qualifier
+      // l'issue quelle qu'elle soit (décroché puis terminé, injoignable, occupé,
+      // pas de réponse, refusé...), pas seulement un appel COMPLETED.
+      // Prédictif : reste restreint à COMPLETED — un échec d'appel automatique
+      // est déjà repris par le redialer, pas besoin d'action agent.
+      const manualTerminalStatuses = [
+        "COMPLETED", "FAILED", "BUSY", "NO_ANSWER", "MISSED", "ABANDONED",
+      ];
       const canOpenQualification =
         data.action === "OPEN_QUALIFICATION" ||
-        ((isManualCall || isPredictiveCall) && data.status === "COMPLETED");
+        (isManualCall && manualTerminalStatuses.includes(data.status ?? "")) ||
+        (isPredictiveCall && data.status === "COMPLETED");
 
       if (canOpenQualification) {
-        // Manuel : seulement si le backend confirme COMPLETED.
-        // Prédictif : ouvrir quand le backend signale OPEN_QUALIFICATION (AMI flow),
-        // ou à défaut sur COMPLETED confirmé.
         store.openQualification();
         const logPrefix = isPredictiveCall ? "[PredictiveHangup]" : "[ManualHangup]";
         console.log(
